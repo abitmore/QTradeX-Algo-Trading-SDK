@@ -1,0 +1,18 @@
+# install/build directories
+build/
+QTradeX.egg-info/
+qtradex/indicators/utilities.c*
+
+# candle cache
+qtradex/common/pipe/
+
+
+# pycaches
+qtradex/__pycache__/
+qtradex/common/__pycache__/
+qtradex/core/__pycache__/
+qtradex/indicators/__pycache__/
+qtradex/optimizers/__pycache__/
+qtradex/plot/__pycache__/
+qtradex/private/__pycache__/
+qtradex/public/__pycache__/
