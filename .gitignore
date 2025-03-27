@@ -1,4 +1,5 @@
 # install/build directories
+dist/
 build/
 QTradeX.egg-info/
 qtradex/indicators/utilities.c*

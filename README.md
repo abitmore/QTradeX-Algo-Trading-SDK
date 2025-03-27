@@ -74,7 +74,9 @@ Key files:
 ### Installation
 
 ```bash
-pip install qtradex
+git clone https://github.com/squidKid-deluxe/QTradeX-Algo-Trading-SDK.git QTradeX
+cd QTradeX
+pip install -e .
 ```
 
 ### Example: Creating a Simple Bot
