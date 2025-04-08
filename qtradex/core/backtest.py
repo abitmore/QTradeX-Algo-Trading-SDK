@@ -20,6 +20,17 @@ def trade(asset, currency, operation, wallet, price, now):
             if price["low"] < operation.buying:
                 execution = operation.buying
                 operation = Buy(maxvolume=operation.maxvolume)
+    elif operation.price is not None:
+        if wallet[asset] and isinstance(operation, Sell):
+            if price["high"] > operation.price:
+                execution = operation.price
+            else:
+                operation = None
+        elif wallet[currency] and isinstance(operation, Buy):
+            if price["low"] < operation.price:
+                execution = operation.price
+            else:
+                operation = None
 
     execution = min(max(execution, price["low"]), price["high"])
 
@@ -49,7 +60,7 @@ def trade(asset, currency, operation, wallet, price, now):
     return wallet, operation
 
 
-def backtest(bot, data, wallet, plot=True, block=True):
+def backtest(bot, data, wallet, plot=True, block=True, return_states=False, range_periods=True):
     bot.reset()
     begin = data.begin
     end = data.end
@@ -59,13 +70,14 @@ def backtest(bot, data, wallet, plot=True, block=True):
 
     orig_tune = bot.tune.copy()
 
-    # allow for different candle sizes whilst maintaining the type of the parameter
-    for k, v in list(bot.tune.items()):
-        if k.endswith("_period"):
-            if isinstance(v, float):
-                bot.tune[k] = v * (86400 / candle_size)
-            else:
-                bot.tune[k] = int(v * (86400 / candle_size))
+    if range_periods:
+        # allow for different candle sizes whilst maintaining the type of the parameter
+        for k, v in list(bot.tune.items()):
+            if k.endswith("_period"):
+                if isinstance(v, float):
+                    bot.tune[k] = v * (86400 / candle_size)
+                else:
+                    bot.tune[k] = int(v * (86400 / candle_size))
 
 
     now = begin + (candle_size * (warmup + 1))
@@ -95,6 +107,8 @@ def backtest(bot, data, wallet, plot=True, block=True):
             {"trades": None, "balances": wallet.copy(), "unix": now, **initial_data}
         )
 
+    last_trade_time = 0
+
     while now <= end:
         tickdx = np.searchsorted(indicated_data["unix"], now, side="left")
         try:
@@ -105,22 +119,28 @@ def backtest(bot, data, wallet, plot=True, block=True):
             continue
 
         # make the wallet read-only before passing it to the user
+        # this is not fail-safe, just helpful to keep accidental modifications out
         wallet._protect()
         indicators = tick_data["indicators"]
-        signal = bot.strategy(
+        operation = bot.strategy(
             {"last_trade": last_trade, "unix": now, "wallet": wallet, **tick_data},
-            tick_data["indicators"],
+            indicators,
         )
-        operation = bot.execution(wallet, signal)
+        # keep the last trade
         if operation is not None:
             last_trade = operation
 
-        # release write protection and trade
-        wallet._release()
-        wallet, operation = trade(
-            data.asset, data.currency, operation, wallet, tick_data, now
-        )
-
+        # if enough time has elapsed and we can trade again
+        if now - last_trade_time >= data.base_size and operation is not None:
+            # release write protection and trade
+            wallet._release()
+            wallet, operation = trade(
+                data.asset, data.currency, operation, wallet, tick_data, now
+            )
+            last_trade_time = now
+        else:
+            # this one doesn't count
+            operation = None
         states.append(
             {
                 "trades": operation,
@@ -136,16 +156,17 @@ def backtest(bot, data, wallet, plot=True, block=True):
     states["trades"] = [i for i in states["trades"] if i is not None]
     indicator_states = rotate(indicator_states)
 
+    if states["trades"]:
+        states["trade_times"], states["trade_prices"] = list(
+            zip(*[[op.unix, op.price] for op in states["trades"]])
+        )
+    else:
+        states["trade_times"], states["trade_prices"] = [], []
+    states["trade_colors"] = [
+        "green" if isinstance(i, Buy) else "red" for i in states["trades"]
+    ]
+
     if plot:
-        if states["trades"]:
-            states["trade_times"], states["trade_prices"] = list(
-                zip(*[[op.unix, op.price] for op in states["trades"]])
-            )
-        else:
-            states["trade_times"], states["trade_prices"] = [], []
-        states["trade_colors"] = [
-            "green" if isinstance(i, Buy) else "red" for i in states["trades"]
-        ]
         bot.plot(data, states, indicator_states, block)
 
     raw_states = states
@@ -159,9 +180,16 @@ def backtest(bot, data, wallet, plot=True, block=True):
 
     bot.tune = orig_tune
 
-    return {
+    ret = {
         **qx.indicators.fitness.fitness(
             keys, states, raw_states, data.asset, data.currency
         ),
         **custom,
     }
+    # if requested, return the raw states along with the fitness.
+    # This is so that papertrade and live can see if the bot is currently buying or
+    # selling even if the bot doesn't say to do anything on a given tick.
+    if return_states:
+        ret = [ret, raw_states, states]
+
+    return ret

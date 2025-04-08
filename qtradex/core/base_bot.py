@@ -5,6 +5,10 @@ import matplotlib.pyplot as plt
 
 class BaseBot:
     def autorange(self):
+        """
+        Returns:
+         - An integer number of days that this bot requires to warm up its indicators
+        """
         return ceil(max(v for k, v in self.tune.items() if k.endswith("_period")))
 
     def indicators(self, data):
@@ -23,7 +27,7 @@ class BaseBot:
         """
         pass
 
-    def execution(self, wallet, signal):
+    def execution(self, signal, indicators, wallet):
         return signal
 
     def fitness(self, states, raw_states, asset, currency):

@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import matplotlib.pyplot as plt
 import matplotlib.style as mplstyle
 import numpy as np
@@ -15,26 +17,35 @@ def plotmotion(block):
         plt.pause(0.00001)
 
 
-def plot_indicators(axes, states, indicators, indicator_fmt):
+def plot_indicators(axes, timestamps, states, indicators, indicator_fmt):
     for key, name, color, idx, title in indicator_fmt:
         ax = axes[idx]
         ax.set_title(title)
         # Plot each EMA with a color gradient
         ax.plot(
-            states["unix"],
+            timestamps,
             indicators[key],
             color=color,
             label=name,
         )
 
 
+def unix_to_stamp(unix):
+    if isinstance(unix, (float, int)):
+        return datetime.fromtimestamp(unix)
+    else:
+        return [datetime.fromtimestamp(i) for i in unix]
+
+
 def plot(data, states, indicators, block, indicator_fmt, style="dark_background"):
+    """
+    plotting of buy/sell with win/loss line plotting
+    buy/sell are green/red triangles
+    plotting of high/low/open/close
+    plotting of indicators (dict of indicator keys to be plotted and color)
+    balance plotting follows price on token not held
+    """
     mplstyle.use(style)
-    # DONE plotting of buy/sell with win/loss line plotting
-    # DONE buy/sell are green/red triangles
-    # DONE plotting of high/low/open/close
-    # DONE plotting of indicators (dict of indicator keys to be plotted and color)
-    # YIKES balance plotting follows price on token not held
 
     n_levels = max(i[3] for i in indicator_fmt) + 2
     # clear the current figure
@@ -42,10 +53,13 @@ def plot(data, states, indicators, block, indicator_fmt, style="dark_background"
     axes = [plt.subplot(n_levels, 1, n) for n in range(1, n_levels + 1)]
     axes[0].set_yscale("log")
 
+    timestamps = unix_to_stamp(states["unix"])
+    states["dates"] = timestamps
+
     # plotting of high/low/open/close
     # high/low
     axes[0].fill_between(
-        states["unix"],
+        timestamps,
         states["low"],
         states["high"],
         color="magenta",
@@ -54,26 +68,24 @@ def plot(data, states, indicators, block, indicator_fmt, style="dark_background"
     )
     # Fill between for open > close
     axes[0].fill_between(
-        states["unix"],
+        timestamps,
         states["open"],
         states["close"],
         where=expand_bools(states["open"] > states["close"], side="right"),
         color=(1, 0, 0, 0.3),  # Red for open > close
-        label="Open > Close",
     )
 
     # Fill between for open < close
     axes[0].fill_between(
-        states["unix"],
+        timestamps,
         states["open"],
         states["close"],
         where=expand_bools(states["open"] < states["close"], side="right"),
         color=(0, 1, 0, 0.3),  # Green for open < close
-        label="Open < Close",
     )
 
     # plot indicators
-    plot_indicators(axes, states, indicators, indicator_fmt)
+    plot_indicators(axes, timestamps, states, indicators, indicator_fmt)
 
     if len(states["trades"]) > 1:
         # plot win / loss lines
@@ -81,16 +93,16 @@ def plot(data, states, indicators, block, indicator_fmt, style="dark_background"
         for op in states["trades"][1:]:
             color = "lime" if op.profit >= 1 else "tomato"
             axes[0].plot(
-                [p_op.unix, op.unix], [p_op.price, op.price], color=color, linewidth=2
+                unix_to_stamp([p_op.unix, op.unix]), [p_op.price, op.price], color=color, linewidth=2
             )
             p_op = op
 
         # plot trade triangles
         buys = zip(
-            *[[op.unix, op.price] for op in states["trades"] if isinstance(op, Buy)]
+            *[[unix_to_stamp(op.unix), op.price] for op in states["trades"] if isinstance(op, Buy)]
         )
         sells = zip(
-            *[[op.unix, op.price] for op in states["trades"] if isinstance(op, Sell)]
+            *[[unix_to_stamp(op.unix), op.price] for op in states["trades"] if isinstance(op, Sell)]
         )
 
         axes[0].scatter(*buys, c="lime", marker="^", s=80)
@@ -98,6 +110,7 @@ def plot(data, states, indicators, block, indicator_fmt, style="dark_background"
 
     for ax in axes[:-1]:
         ax.legend()
+        ax.tick_params(axis='x', labelrotation=45)
 
     # plot balances chart
     balances = rotate(states["balances"])
@@ -124,7 +137,7 @@ def plot(data, states, indicators, block, indicator_fmt, style="dark_background"
         # make the line
         lines.append(
             ax.plot(
-                states["unix"],
+                timestamps,
                 balance,
                 label=token,
                 color=["tomato", "yellow", "orange"][idx % 3],

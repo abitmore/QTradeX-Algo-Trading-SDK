@@ -3,10 +3,12 @@ import time
 
 import ccxt
 import numpy as np
-from qtradex.common.utilities import format_timeframe, rotate, to_iso_date, trace
-from qtradex.public.utilities import clip_to_time_range
+from qtradex.common.utilities import (format_timeframe, rotate, to_iso_date,
+                                      trace, unformat_timeframe)
+from qtradex.public.utilities import BadTimeframeError, clip_to_time_range
 
 DETAIL = False
+ATTEMPTS = 5
 
 
 def klines_ccxt(exchange, asset, currency, start, end, interval):
@@ -23,7 +25,8 @@ def klines_ccxt(exchange, asset, currency, start, end, interval):
         "pair": f"{asset}/{currency}",
         "ccxt_hook": getattr(ccxt, exchange)(),
     }
-    assert api["ccxt_hook"].has["fetchOHLCV"], f"{exchange} does not support klines."
+    if not api["ccxt_hook"].has["fetchOHLCV"]:
+        raise ValueError(f"{exchange} does not support klines.")
     if api["pair"] not in api["ccxt_hook"].load_markets().keys():
         raise ValueError(api["pair"])
 
@@ -40,7 +43,10 @@ def klines_ccxt(exchange, asset, currency, start, end, interval):
     if DETAIL:
         print("\nstart:", to_iso_date(start), "end:", to_iso_date(end))
 
+    idx = 0
+
     while True:
+        idx += 1
         try:
             # Collect external data in pages if need be
             data = paginate_candles(api, deep_begin, end, interval)
@@ -57,7 +63,12 @@ def klines_ccxt(exchange, asset, currency, start, end, interval):
                 print(len(data), "edge match - sort by unix")
             data = rotate(data)
             if DETAIL:
-                print(len(data["unix"]), "rotation; reformatted to dict of lists")
+                print(
+                    len(data["unix"]),
+                    data["unix"][0],
+                    data["unix"][-1],
+                    "rotation; reformatted to dict of lists",
+                )
             data = interpolate_previous(data, deep_begin, end, interval)
             if DETAIL:
                 print(
@@ -66,12 +77,18 @@ def klines_ccxt(exchange, asset, currency, start, end, interval):
                     "missing buckets to candles interpolated as previous close",
                 )
             data = {k: np.array(v) for k, v in data.items()}
-            data = clip_to_time_range(data, start, end)
-            if DETAIL:
-                print(len(data["unix"]), "windowed to initial start / end request")
+            # data = clip_to_time_range(data, start, end)
+            # if DETAIL:
+            #     print(
+            #         len(data["unix"]),
+            #         "windowed to initial start / end request",
+            #     )
             data = left_strip(data)
             if DETAIL:
-                print(len(data["unix"]), "stripped of empty pre-market candles")
+                print(
+                    len(data["unix"]),
+                    "stripped of empty pre-market candles",
+                )
             data = normalize(data)
             if DETAIL:
                 print({k: len(v) for k, v in data.items()})
@@ -91,8 +108,11 @@ def klines_ccxt(exchange, asset, currency, start, end, interval):
                 )
                 print("\n\nRETURNING", exchange.upper(), api["pair"], "CANDLE DATA\n\n")
             return data
-
+        except BadTimeframeError:
+            raise
         except Exception as error:
+            if idx > ATTEMPTS:
+                raise
             msg = trace(error)
             print(msg, {k: v for k, v in api.items() if k != "secret"})
             continue
@@ -115,35 +135,56 @@ def paginate_candles(api, start, end, interval):
     # Determine number of candles we require
     depth = int(math.ceil((end - start) / float(interval)))
     # Attempt to gather all the candles at once
-    data = candles(api, start, interval, limit=depth)
+    data = []
+    last_chunk = candles(api, start, interval, limit=depth)
+    data.extend(last_chunk)
+    depth -= len(last_chunk)
     # If that didn't return enough
-    while len(data) < depth:
+    while depth > 0:
         # Find how many are left
-        depth -= len(data)
+        print(f"Only got {len(last_chunk)} datapoints, {depth} left.")
         # Tick forward, but leave an `overlap`
-        start += (len(data) - overlap) * interval
+        start += (len(last_chunk) - overlap) * interval
         # Don't anger the database overlords
-        time.sleep(1)
+        time.sleep(2)
         # Get more candles
-        data.extend(candles(api, start, interval, limit=depth))
+        last_chunk = candles(api, start, interval, limit=depth)
+        data.extend(last_chunk)
+        depth -= len(last_chunk)
     return data
 
 
 def candles(api, start, interval, limit):
-    # initialize the exchange
-    exchange = api["ccxt_hook"]
-    timeframe = format_timeframe(interval)
-    print(f"Collecting {limit} candles for {api['pair']} from {start}")
-    page = exchange.fetch_ohlcv(
-        symbol=api["pair"], timeframe=timeframe, since=start * 1000, limit=limit
-    )
-    return [
-        {
-            "unix": i[0] / 1000,
-            **dict(zip(["open", "high", "low", "close", "volume"], i[1:])),
-        }
-        for i in page
-    ]
+    while True:
+        try:
+            # initialize the exchange
+            exchange = api["ccxt_hook"]
+            timeframe = format_timeframe(interval)
+            print(f"Collecting {limit} candles for {api['pair']} from {start} @ {timeframe} candles")
+            if timeframe not in exchange.timeframes:
+                raise BadTimeframeError(
+                    "Valid timeframes: ",
+                    [unformat_timeframe(i) for i in exchange.timeframes.keys()],
+                )
+            page = exchange.fetch_ohlcv(
+                symbol=api["pair"], timeframe=timeframe, since=start * 1000, limit=limit
+            )
+            return [
+                {
+                    "unix": i[0] / 1000,
+                    **dict(zip(["open", "high", "low", "close", "volume"], i[1:])),
+                }
+                for i in page
+            ]
+        except (
+            ccxt.DDoSProtection,
+            ccxt.ExchangeNotAvailable,
+            ccxt.ExchangeError,
+            ccxt.InvalidNonce,
+        ):
+            print("Encountered rate limit!  Pausing for 10 seconds...")
+            time.sleep(10)
+            continue
 
 
 # Remove null data function

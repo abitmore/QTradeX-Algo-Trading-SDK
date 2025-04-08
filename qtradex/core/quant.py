@@ -54,6 +54,7 @@ def slice_candles(now, data, candle, depth):
 def filter_glitches(days, tune):
     """
     Early datasets sometimes contain wild irregular data
+    FIXME: is this even used, and if so, is it still useful?
     """
     glitch_days = {
         "BTS": {"BITCNY": 200, "default": 250},

@@ -12,7 +12,7 @@ cython_extensions = [
 setup(
     name="QTradeX",
     version="1.0",
-    author="squidKid-deluxe, litepresence",
+    authors=["squidKid-deluxe", "litepresence"],
     description="",  # Add your description here
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",

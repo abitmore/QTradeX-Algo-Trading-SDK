@@ -13,74 +13,27 @@ from qtradex.public.klines_alphavantage import (klines_alphavantage_crypto,
                                                 klines_alphavantage_forex,
                                                 klines_alphavantage_stocks)
 from qtradex.public.klines_bitshares import klines_bitshares
-from qtradex.public.klines_ccxt import klines_ccxt
+from qtradex.public.klines_ccxt import BadTimeframeError, klines_ccxt
 from qtradex.public.klines_cryptocompare import klines_cryptocompare
 from qtradex.public.klines_synthetic import klines_synthetic
-from qtradex.public.utilities import clip_to_time_range, implied, invert
+from qtradex.public.utilities import (clip_to_time_range, implied, invert,
+                                      merge_candles, quantize_unix,
+                                      reaggregate)
 
-DETAIL = True
-
-
-def quantize_unix(unix_array, candle_size):
-    # Quantize the unix times by the given candle size
-    return np.floor(unix_array / candle_size) * candle_size
+DETAIL = False
 
 
-def merge_candles(candles1, candles2, candle_size):
-    # Quantize the unix times for both dictionaries
-    candles1["unix"] = quantize_unix(candles1["unix"], candle_size)
-    candles2["unix"] = quantize_unix(candles2["unix"], candle_size)
-
-    # Find the unique unix values from both dictionaries
-    unique_unix = np.unique(np.concatenate([candles1["unix"], candles2["unix"]]))
-
-    # Initialize the merged dictionary
-    merged_candles = {
-        "unix": unique_unix,
-        "high": np.zeros_like(unique_unix, dtype=float),
-        "low": np.zeros_like(unique_unix, dtype=float),
-        "open": np.zeros_like(unique_unix, dtype=float),
-        "close": np.zeros_like(unique_unix, dtype=float),
-        "volume": np.zeros_like(unique_unix, dtype=float),
-    }
-
-    # Merge and handle conflicts by prioritizing candles1
-    for i, unix in enumerate(unique_unix):
-        # Initialize high, low, open, close for this unix
-        high_vals = []
-        low_vals = []
-        vol_vals = []
-        open_val = None
-        close_val = None
-
-        # Handle candles1 prices at the current unix time
-        if unix in candles1["unix"]:
-            idx = np.where(candles1["unix"] == unix)[0][0]
-            high_vals.append(candles1["high"][idx])
-            low_vals.append(candles1["low"][idx])
-            vol_vals.append(candles1["volume"][idx])
-            if open_val is None:
-                open_val = candles1["open"][idx]
-            close_val = candles1["close"][idx]  # Always overwrite with the last value
-
-        # Handle candles2 prices at the current unix time
-        if unix in candles2["unix"]:
-            idx = np.where(candles2["unix"] == unix)[0][0]
-            high_vals.append(candles2["high"][idx])
-            low_vals.append(candles2["low"][idx])
-            vol_vals.append(candles2["volume"][idx])
-            if open_val is None:
-                open_val = candles2["open"][idx]
-            close_val = candles2["close"][idx]  # Always overwrite with the last value
-
-        # Set the values for the merged dictionary
-        merged_candles["high"][i] = np.max(high_vals) if high_vals else 0
-        merged_candles["low"][i] = np.min(low_vals) if low_vals else 0
-        merged_candles["open"][i] = open_val if open_val is not None else 0
-        merged_candles["close"][i] = close_val if close_val is not None else 0
-        merged_candles["volume"][i] = np.max(vol_vals) if vol_vals else 0
-
-    return merged_candles
+def parse_date(date_str):
+    # Check if the input is a Unix timestamp (integer or float)
+    if isinstance(date_str, (int, float)):
+        return date_str
+    # Try parsing the date in the YY-MM-DD format
+    try:
+        return time.mktime(datetime.strptime(date_str, "%Y-%m-%d").timetuple())
+    except ValueError:
+        raise ValueError(
+            f"Date must be in YY-MM-DD format or a Unix timestamp; got {date_str}"
+        )
 
 
 class Data:
@@ -109,17 +62,21 @@ class Data:
             raise ValueError("`days` OR `end` may be given, not both.")
 
         try:
-            self.begin = time.mktime(datetime.strptime(begin, "%Y-%m-%d").timetuple())
+            self.begin = parse_date(begin)
         except Exception as error:
-            raise ValueError("`begin` must be in %Y-%m-%d format.") from error
+            raise ValueError(
+                "`begin` must be in YY-MM-DD format or a Unix timestamp."
+            ) from error
 
         if end is None and days is not None:
             self.end = int(self.begin - (86400 * days))
         elif days is None and end is not None:
             try:
-                self.end = time.mktime(datetime.strptime(end, "%Y-%m-%d").timetuple())
+                self.end = parse_date(end)
             except Exception as error:
-                raise ValueError("`end` must be in %Y-%m-%d format.") from error
+                raise ValueError(
+                    "`end` must be in YY-MM-DD format or a Unix timestamp."
+                ) from error
         else:
             # Default to now
             self.end = int(time.time())
@@ -130,8 +87,9 @@ class Data:
         self.currency = currency
         self.pool = pool
         self.candle_size = int(candle_size)
-        self.begin = math.floor(self.begin / self.candle_size) * self.candle_size
-        self.end = math.floor(self.end / self.candle_size) * self.candle_size
+        self.base_size = int(candle_size)
+        self.begin = math.ceil(self.begin / candle_size) * candle_size
+        self.end = math.ceil(self.end / candle_size) * candle_size
         self.api_key = api_key
 
         if self.pool is not None and exchange != "bitshares":
@@ -144,27 +102,28 @@ class Data:
         self.intermediary = intermediary
 
         if intermediary is None:
-            self.raw_candles = self.retrieve_and_cache_candles(
+            self.raw_candles = self.retrieve_and_cache_candles(self.candle_size, 
                 self.asset, self.currency
             )
         else:
-            print(f"Using {intermediary} to create implied price...")
+            if DETAIL:
+                print(f"Using {intermediary} to create implied price...")
             self.raw_candles = implied(
-                self.retrieve_and_cache_candles(self.asset, self.intermediary),
-                self.retrieve_and_cache_candles(self.intermediary, self.currency),
+                self.retrieve_and_cache_candles(self.candle_size, self.asset, self.intermediary),
+                self.retrieve_and_cache_candles(self.candle_size, self.intermediary, self.currency),
             )
 
-        if not np.any(self.raw_candles["unix"]):
-            raise RuntimeError(
-                f"{self.exchange} does not provide {self.asset}/{self.currency} for this time range."
+        if np.any(self.raw_candles["unix"]):
+            self.raw_candles["unix"] = quantize_unix(
+                self.raw_candles["unix"], self.candle_size
             )
 
-        self.raw_candles["unix"] = quantize_unix(
-            self.raw_candles["unix"], self.candle_size
-        )
-
-        self.begin = np.min(self.raw_candles["unix"])
-        self.end = np.max(self.raw_candles["unix"])
+            self.begin = np.min(self.raw_candles["unix"])
+            self.end = np.max(self.raw_candles["unix"])
+        # else:
+        #     raise RuntimeError(
+        #         f"{self.exchange} does not provide {self.asset}/{self.currency} for this time range."
+        #     )
 
     def __repr__(self):
         """
@@ -181,6 +140,25 @@ class Data:
     def __getitem__(self, index):
         return self.raw_candles[index]
 
+    def update_candles(self, begin, end):
+        """
+        Re-initialize this class with new start and end.  This method is provided mostly
+        for papertrade and live modes where the backend needs to get fresh data.
+        """
+        self.raw_candles = Data(
+            exchange=self.exchange,
+            asset=self.asset,
+            currency=self.currency,
+            begin=begin,
+            end=end,
+            candle_size=self.candle_size,
+            pool=self.pool,
+            api_key=self.api_key,
+            intermediary=self.intermediary,
+        ).raw_candles
+        self.begin = begin
+        self.end = end
+
     def keys(self):
         return self.raw_candles.keys()
 
@@ -190,7 +168,7 @@ class Data:
     def items(self):
         return self.raw_candles.items()
 
-    def retrieve_and_cache_candles(self, asset, currency):
+    def retrieve_and_cache_candles(self, candle_size, asset, currency):
         """
         Retrieves and caches candlestick data for the specified exchange, asset, and currency
         over a given time range. If the data for the requested time range already exists in cache,
@@ -222,44 +200,61 @@ class Data:
         except FileNotFoundError:
             json_ipc("data_index.json", "{}")
             index = {}
-        index_key = str((self.exchange, self.candle_size, asset, currency))
-        rev_index_key = str((self.exchange, self.candle_size, currency, asset))
+        # try to get the minimum time period cache, otherwise initialize it
+        try:
+            min_time = json_ipc("min_time.json")
+        except FileNotFoundError:
+            json_ipc("min_time.json", "{}")
+            min_time = {}
+        index_key = str((self.exchange, self.pool, candle_size, asset, currency))
+        rev_index_key = str(
+            (self.exchange, self.pool, candle_size, currency, asset)
+        )
         total_time = [self.begin, self.end]
         raw_candles = None
         # if the exchange hasn't been queried before for this pair or its inverse
         if index_key not in index and rev_index_key not in index:
             # gather data
-            raw_candles = self.gather_data(self.begin, self.end, asset, currency)
+            if DETAIL:
+                print(f"gather: {total_time}  use_cache: N/A  @ {candle_size}, {index_key}")
+            raw_candles = self.gather_data(candle_size, self.begin, self.end, asset, currency)
         else:
             inverted = rev_index_key in index
             index_key = rev_index_key if inverted else index_key
             # localize
-            time_range = index[index_key]
+            time_range = [quantize_unix(i, candle_size) for i in index[index_key]]
+            if DETAIL:
+                print(time_range)
+                print(total_time)
             gather = None
             use_cache = None
             erase_cache = False
             # completely before or after what we need
             if time_range[1] < self.begin or time_range[0] > self.end:
-                gather = [self.begin, self.end]
-                # FIXME if we don't erase the cache here it would leave data gaps
-                #       but that should be detected and filled, not overwritten
+                gather = [[self.begin, self.end]]
+                # TODO if we don't erase the cache here it would leave data gaps
+                #      but that should be detected and filled, not overwritten
+                #      The difficulty is only filling that gap when it is actually
+                #      asked for.
                 erase_cache = True
 
             # within the range of what we need
             elif time_range[0] > self.begin and time_range[1] < self.end:
-                # FIXME technically this is "helpful" because we could mix'n'match
-                #       and get the data "around" what we already have, but that's
-                #       a lot to implement.  We'll get there.
-                gather = [self.begin, self.end]
+                # Make two queries to get the data "around" what we already have
+                gather = [
+                    [self.begin, time_range[0] + candle_size],
+                    [time_range[1] - candle_size, self.end],
+                ]
+                use_cache = time_range[:]
 
             # covers the end of what we need but not the beginning
             elif time_range[0] > self.begin and time_range[1] >= self.end:
-                gather = [self.begin, time_range[0] + self.candle_size]
+                gather = [[self.begin, time_range[0] + candle_size]]
                 use_cache = [time_range[0], self.end]
 
             # covers the beginning of what we need but not the end
             elif time_range[0] <= self.begin and time_range[1] < self.end:
-                gather = [time_range[1] - self.candle_size, self.end]
+                gather = [[time_range[1] - candle_size, self.end]]
                 use_cache = [self.begin, time_range[1]]
 
             # all of what we need and potentially more
@@ -272,10 +267,19 @@ class Data:
                 )
 
             data = []
-            print(f"gather: {gather}  use_cache: {use_cache}")
+            if DETAIL:
+                print(f"gather: {gather}  use_cache: {use_cache}  @ {candle_size}, {index_key}")
             # gather up data from the two sources
             if gather is not None:
-                data.append(self.gather_data(*gather, asset, currency))
+                for batch in gather:
+                    batch = [max(i, min_time.get(index_key, 0)) for i in batch]
+                    if batch[0] == batch[1]:
+                        if DETAIL:
+                            print(f"Cannot fetch {batch}, cache says this exchange does not go this far back")
+                        continue
+                    data.append(self.gather_data(candle_size, *batch, asset, currency))
+                    if batch[0] + candle_size < (mindata:=min(data[-1]["unix"])):
+                        min_time[index_key] = float(max(min_time.get(index_key, 0), mindata))
             if use_cache is not None:
                 data.append(
                     {
@@ -287,11 +291,11 @@ class Data:
                     data[-1] = invert(data[-1])
 
             candles = dict()
-            if len(data) == 2:
+            if len(data) > 1:
                 # merge the two data sources
                 # this will implicitly never happen if erase_cache is True, though
                 # an explicit check might be prudent
-                candles = merge_candles(*data, self.candle_size)
+                candles = merge_candles(data, candle_size)
             else:
                 candles = data[0]
 
@@ -305,22 +309,36 @@ class Data:
                 total_time = [self.begin, self.end]
 
         # write the new cache with all the data
-        json_ipc(
-            f"{index_key} candles.json",
-            json.dumps({k: v.tolist() for k, v in raw_candles.items()}),
-        )
 
-        # clip the data to the requested amount
+        # if the last candle is incomplete, don't cache it
+        crop = -1 if time.time() - self.end < candle_size else None
+        if crop is not None and DETAIL:
+            print("Cropping last (incomplete) candle from the cache...")
+        # convert numpy arrays to lists and crop if required
+        cache = {k: v[:crop].tolist() for k, v in raw_candles.items()}
+        # find the actual start and end of the cached data
+        try:
+            total_time = [min(cache["unix"]), max(cache["unix"])]
+        except:
+            raise TimeoutError(
+                f"{self.exchange} does not provide data for this time range."
+            )
+        # cache it
+        json_ipc(f"{index_key} candles.json", json.dumps(cache))
+
+        # clip the return data to the requested amount
         raw_candles = clip_to_time_range(raw_candles, self.begin, self.end)
 
-        # stow the index
+        json_ipc("min_time.json", json.dumps(min_time))
+
+        # stow the start and end in the index
         if total_time is not None:
             index[index_key] = total_time
             json_ipc("data_index.json", json.dumps(index))
 
         return raw_candles
 
-    def gather_data(self, begin, end, asset, currency, inverted=False):
+    def gather_data(self, candle_size, begin, end, asset, currency, inverted=False):
         """
         Gathers historical candlestick data for a specified asset and currency pair
         from a variety of supported exchanges and APIs. The method checks the
@@ -353,82 +371,75 @@ class Data:
         """
         try:
             if DETAIL:
-                print(f"gathering data from {self.exchange}, {begin} to {end}")
-            if self.exchange.startswith("bitshares"):
-                raw_candles = klines_bitshares(
-                    asset,
-                    currency,
-                    begin,
-                    end,
-                    self.candle_size,
-                    self.pool,
+                print(
+                    f"gathering data from {self.exchange}, {begin} to {end}, candle size {candle_size}"
                 )
-            elif self.exchange == "cryptocompare":
-                raw_candles = klines_cryptocompare(
-                    asset,
-                    currency,
-                    begin,
-                    end,
-                    self.candle_size,
-                    self.api_key,
-                )
-                # print(raw_candles)
-                # days = len(self.raw_candles["unix"])
-                # days = filter_glitches(days, tune)
-            elif self.exchange == "alphavantage_stocks":
-                raw_candles = klines_alphavantage_stocks(
-                    asset,
-                    currency,
-                    begin,
-                    end,
-                    self.candle_size,
-                    self.api_key,
-                )
-            elif self.exchange == "alphavantage_forex":
-                raw_candles = klines_alphavantage_forex(
-                    asset,
-                    currency,
-                    begin,
-                    end,
-                    self.candle_size,
-                    self.api_key,
-                )
-            elif self.exchange == "alphavantage_crypto":
-                raw_candles = klines_alphavantage_crypto(
-                    asset,
-                    currency,
-                    begin,
-                    end,
-                    self.candle_size,
-                    self.api_key,
-                )
-            elif self.exchange == "synthetic":
-                raw_candles = klines_synthetic()
+            exchange_functions = {
+                "bitshares": klines_bitshares,
+                "cryptocompare": klines_cryptocompare,
+                "alphavantage_stocks": klines_alphavantage_stocks,
+                "alphavantage_forex": klines_alphavantage_forex,
+                "alphavantage_crypto": klines_alphavantage_crypto,
+                "synthetic": klines_synthetic,
+            }
+
+            if self.exchange in exchange_functions:
+                if self.exchange == "synthetic":
+                    raw_candles = exchange_functions[self.exchange]()
+                else:
+                    raw_candles = exchange_functions[self.exchange](
+                        asset,
+                        currency,
+                        begin,
+                        end,
+                        candle_size,
+                        self.api_key if self.exchange.startswith("alphavantage") else self.pool,
+                    )
             elif self.exchange in ccxt.exchanges:
-                print("Using CCXT...")
+                if DETAIL:
+                    print("Using CCXT...")
                 raw_candles = klines_ccxt(
                     self.exchange,
                     asset,
                     currency,
                     begin,
                     end,
-                    self.candle_size,
+                    candle_size,
                 )
             else:
                 raise ValueError(f"Invalid exchange {self.exchange}")
             return raw_candles
-        # FIXME go through the other klines scripts and have them raise BadSymbol
-        #       instead of IndexErrors or KeyErrors
-        # ccxt.base.errors.BadSymbol:
-        except Exception:
+        except BadTimeframeError as error:
+            # if there is a smaller candle size
+            if any(candle_size > i for i in error.args[1]):
+                # then we need to gather that smaller size and make new candles
+                # that are the right size out of it
+
+                # get the biggest size that is smaller than the one we want
+                smaller = max([i for i in error.args[1] if candle_size > i])
+                if DETAIL:
+                    print(
+                        f"Exchange does not provide {candle_size} candles! "
+                        f" Requesting next smaller candle ({smaller}) and rebucketing..."
+                    )
+                data = self.retrieve_and_cache_candles(smaller, asset, currency)
+                return reaggregate(data, candle_size)
+            # but if there isn't, there is no hope
+            else:
+                raise
+        # TODO go through the other klines scripts and have them raise BadSymbol
+        #      instead of IndexErrors or KeyErrors
+        # except ccxt.base.errors.BadSymbol:
+        except Exception as error:
             if inverted:
                 raise
-            print(
-                it(
-                    "yellow",
-                    "Data gathering failed!  Reversing pair and trying again...",
+            if DETAIL:
+                print(
+                    it(
+                        "yellow",
+                        f"Data gathering failed! {error}  Reversing pair and trying again...",
+                    )
                 )
-            )
             # reverse pair and try again
             asset, currency = currency, asset
             return invert(self.gather_data(begin, end, asset, currency, inverted=True))

@@ -37,10 +37,8 @@ def bound_neurons(bot):
         return int(ret) if isint else ret
 
     bot.tune = {
-        key: clamp(value, minv, maxv, clamp_amt)
-        for idx, ((key, value), (minv, maxv, clamp_amt)) in enumerate(
-            zip(bot.tune.items(), bot.clamps)
-        )
+        key: clamp(bot.tune[key], minv, maxv, clamp_amt)
+        for key, (minv, _, maxv, clamp_amt) in bot.clamps.items()
     }
 
     bot.autorange()

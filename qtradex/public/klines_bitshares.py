@@ -38,22 +38,17 @@ from random import shuffle
 from typing import Dict, List, Optional
 
 import matplotlib.pyplot as plt
-
 # THIRD PARTY MODULES
 import numpy as np
-
 # EXTINCTION EVENT MODULES
 from qtradex.common.bitshares_nodes import bitshares_nodes
 from qtradex.common.json_ipc import json_ipc
 from qtradex.common.utilities import from_iso_date, to_iso_date, trace
 from qtradex.public.kibana import fetch_candles
-from qtradex.public.rpc import (
-    rpc_get_objects,
-    rpc_last,
-    rpc_lookup_asset_symbols,
-    rpc_market_history,
-    wss_handshake,
-)
+from qtradex.public.rpc import (rpc_get_objects, rpc_last,
+                                rpc_lookup_asset_symbols, rpc_market_history,
+                                wss_handshake)
+from qtradex.public.utilities import BadTimeframeError
 
 # ======================================================================
 VERSION = "klines_bitshares v0.00000001"
@@ -61,7 +56,7 @@ API = "BitShares Public API Nodes"
 # ======================================================================
 ATTEMPTS = 30
 TIMEOUT = 480
-
+DETAIL = False
 
 def parse_market_history(
     graphene_history: List[Dict], period: int, precision: Dict[str, int]
@@ -192,7 +187,8 @@ def interpolate_previous(
     else:
         # If no data exists, fetch the last known close price from RPC
         close = rpc_last(rpc, pair)
-        print(">" * 30, close, "<" * 30)
+        if DETAIL:
+            print(">" * 30, close, "<" * 30)
 
         # Fill all time periods with the last known close price
         for unix in data2["unix"]:
@@ -321,7 +317,14 @@ def truncate_depth(data: Dict[str, List[float]], depth: int) -> Dict[str, List[f
 
 
 def dexdata(
-    signal, asset: str, currency: str, start: int, stop: int, period: int, depth: int
+    signal,
+    asset: str,
+    currency: str,
+    _,
+    start: int,
+    stop: int,
+    period: int,
+    depth: int,
 ) -> None:
     """
     Fetch and process market data from multiple nodes, then return the common kline response.
@@ -343,13 +346,16 @@ def dexdata(
         ValueError: If the provided period is not valid.
     """
     if period not in [300, 14400, 86400]:
-        raise ValueError("Invalid period. Must be one of [300, 14400, 86400]")
+        json_ipc("proxy.txt", '["failed"]')
+        signal.value = 2
+        return
 
     window = int(period * 200)  # window size for each node call
     calls = min(
         5, (1 + int((stop - start) / float(window)))
     )  # how many times to call nodes
-    print("window", window, "calls", calls)
+    if DETAIL:
+        print("window", window, "calls", calls)
 
     # Fetch and shuffle node list to distribute load
     nodes = bitshares_nodes
@@ -363,7 +369,8 @@ def dexdata(
             # Rotate the nodes list for load balancing
             nodes.append(nodes.pop(0))
             node = nodes[0]
-            print("node", node)
+            if DETAIL:
+                print("node", node)
 
             rpc = wss_handshake(node)  # Establish a websocket connection
 
@@ -378,7 +385,8 @@ def dexdata(
             for i in range((calls - 1), -1, -1):
                 g_start = now - (i + 1) * window
                 g_stop = now - i * window
-                print("call", i, period, window, g_start, g_stop)
+                if DETAIL:
+                    print("call", i, period, window, g_start, g_stop)
                 data += rpc_market_history(
                     rpc, currency_id, asset_id, period, g_start, g_stop
                 )
@@ -391,7 +399,8 @@ def dexdata(
             # Track duplicate data to ensure consensus
             mavens.append(json_dumps(data))
             max_count = Counter(mavens).most_common(1)[0][1]
-            print(max_count, node)
+            if DETAIL:
+                print(max_count, node)
 
             rpc.close()  # Close the RPC connection
 
@@ -452,11 +461,13 @@ def dexdata_pools(
         ValueError: If the asset and currency pair in the pool are invalid or mismatched.
     """
     # Get node connection
-    print("Getting node...")
+    if DETAIL:
+        print("Getting node...")
     rpc = wss_handshake()
 
     # Verify the asset and currency pair in the pool
-    print("Checking pair...")
+    if DETAIL:
+        print("Checking pair...")
     getobj = rpc_get_objects(rpc, pool)
     asset_a = rpc_get_objects(rpc, getobj["asset_a"])["symbol"]
     asset_b = rpc_get_objects(rpc, getobj["asset_b"])["symbol"]
@@ -471,16 +482,13 @@ def dexdata_pools(
     inverted = asset_a == asset
 
     # Fetch market data from the pool
-    print("Fetching candles...")
     data = fetch_candles(rpc, pool, start, stop, period)
 
     # Process and normalize the data
-    print("Reformatting data...")
     data = reformat(data)  # Convert from list of dicts to dict of lists
     data = normalize(data)  # Filter extreme outlier values
 
     # Interpolate missing data
-    print("Interpolating data...")
     data = interpolate_previous(rpc, f"{asset}:{currency}", data, start, stop, period)
 
     # Truncate data to the requested depth
@@ -542,9 +550,10 @@ def klines_bitshares(
 
     # Calculate the duration in days
     days = (stop - start) / 86400.0
-    print(
-        f"RPC {asset} {currency} {start}s {stop}e CANDLE {period}s DAYS {days:.1f} DEPTH {depth}"
-    )
+    if DETAIL:
+        print(
+            f"RPC {asset} {currency} {start}s {stop}e CANDLE {period}s DAYS {days:.1f} DEPTH {depth}"
+        )
 
     # Ensure depth is valid
     if depth < 1:
@@ -557,7 +566,8 @@ def klines_bitshares(
         attempt = 0
         while attempt < ATTEMPTS and not signal.value:
             attempt += 1
-            print(f"\nklines_bitshares attempt: {attempt} at {time.ctime()}")
+            if DETAIL:
+                print(f"\nklines_bitshares attempt: {attempt} at {time.ctime()}")
 
             # Choose which function to call based on whether a pool is specified
             child = Process(
@@ -575,6 +585,10 @@ def klines_bitshares(
     # Clear the proxy file after reading the data
     json_ipc("proxy.txt", "")
 
+    if "failed" in data:
+        raise BadTimeframeError("Invalid period. Must be one of", [300, 14400, 86400])
+
     # Convert data to numpy arrays for performance
-    print(f"klines_bitshares elapsed: {time.time() - begin:.2f} seconds")
+    if DETAIL:
+        print(f"klines_bitshares elapsed: {time.time() - begin:.2f} seconds")
     return {k: np.array(v) for k, v in data.items()}

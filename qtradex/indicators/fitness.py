@@ -112,7 +112,7 @@ def sortino_ratio(roi, losses=[], risk_free_rate=1.05):
     )
 
     if downside_deviation == 0:
-        return 0  # Handle division by zero
+        downside_deviation = 1  
 
     return (roi - risk_free_rate) / downside_deviation
 
@@ -129,7 +129,7 @@ def maximum_drawdown(balances):
     """
     peak = max(balances)
     trough = min(balances)
-    return -((peak - trough) / peak)
+    return ((peak - trough) / peak)
 
 
 def calmar_ratio(cagr_value, maximum_drawdown_value):
@@ -143,7 +143,7 @@ def calmar_ratio(cagr_value, maximum_drawdown_value):
     Returns:
     float: The Calmar Ratio.
     """
-    return cagr_value / maximum_drawdown_value
+    return cagr_value / -maximum_drawdown_value
 
 
 def omega_ratio(wins, losses):
@@ -414,6 +414,7 @@ def fitness(keys, states, raw_states, asset, currency):
                 params = (
                     results["roi"],
                     results["alpha"],
+                    results["beta"],
                     np.std(
                         np.subtract(states["balance_values"], states["hold_states"])
                     ),

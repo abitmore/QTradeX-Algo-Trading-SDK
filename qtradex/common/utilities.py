@@ -197,6 +197,23 @@ def format_timeframe(seconds):
     return f"{ceil(seconds/times[-1])}{labels[-1]}"
 
 
+def unformat_timeframe(timeframe):
+    """
+    take a value like:
+    1m, 5m, 1h, 8h, 1d, 1w, 1M, etc.
+    and return it's value in seconds
+    """
+    # minute, hour, day, week, month
+    times = {
+        "m": 60,
+        "h": 60 * 60,
+        "d": 60 * 60 * 24,
+        "w": 60 * 60 * 24 * 7,
+        "M": 60 * 60 * 24 * 7 * 4,
+    }
+    return times[timeframe[-1]] * int(timeframe[:-1])
+
+
 # FILES AND LOGGING
 # ======================================================================
 def race_write(doc="", text=""):
