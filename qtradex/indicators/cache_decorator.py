@@ -4,6 +4,8 @@ from functools import wraps
 import cachetools
 import numpy as np
 
+from .utilities import float_period as cython_float_period
+
 
 def make_hashable(*args, **kwargs):
     # Convert args to a hashable format
@@ -49,3 +51,11 @@ def cache(func):
         return result
 
     return wrapper
+
+
+def float_period(*periods):
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            return cython_float_period(func, args, periods)
+        return wrapper
+    return decorator
