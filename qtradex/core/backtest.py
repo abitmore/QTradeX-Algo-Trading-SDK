@@ -1,3 +1,4 @@
+import json
 from typing import Dict, List, Union
 
 import numpy as np
@@ -5,6 +6,7 @@ import qtradex as qx
 from qtradex.common.utilities import rotate
 from qtradex.core.quant import preprocess_states, slice_candles
 from qtradex.private.signals import Buy, Sell, Thresholds
+from qtradex.private.wallet import PaperWallet
 
 
 def trade(asset, currency, operation, wallet, price, now):
@@ -60,7 +62,9 @@ def trade(asset, currency, operation, wallet, price, now):
     return wallet, operation
 
 
-def backtest(bot, data, wallet, plot=True, block=True, return_states=False, range_periods=True):
+def backtest(bot, data, wallet=None, plot=True, block=True, return_states=False, range_periods=True, show=True):
+    if wallet is None:
+        wallet = PaperWallet({data.asset:0, data.currency:1})
     bot.reset()
     begin = data.begin
     end = data.end
@@ -166,9 +170,6 @@ def backtest(bot, data, wallet, plot=True, block=True, return_states=False, rang
         "green" if isinstance(i, Buy) else "red" for i in states["trades"]
     ]
 
-    if plot:
-        bot.plot(data, states, indicator_states, block)
-
     raw_states = states
     states = preprocess_states(states, (data.asset, data.currency))
 
@@ -186,6 +187,12 @@ def backtest(bot, data, wallet, plot=True, block=True, return_states=False, rang
         ),
         **custom,
     }
+
+    if plot:
+        if show:
+            print(json.dumps(ret, indent=4))
+        bot.plot(data, raw_states, indicator_states, block)
+
     # if requested, return the raw states along with the fitness.
     # This is so that papertrade and live can see if the bot is currently buying or
     # selling even if the bot doesn't say to do anything on a given tick.

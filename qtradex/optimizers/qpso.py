@@ -1,17 +1,17 @@
 r"""
- ________ __________  _________________   
-  \_____  \\______   \/   _____/\_____  \  
-   /  / \  \|     ___/\_____  \  /   |   \ 
-  /   \_/.  \    |    /        \/    |    \
-  \_____\ \_/____|   /_______  /\_______  /
-         \__>                \/         \/                       
-               
-╔═╗ ┬ ┬┌─┐┌┐┌┌┬┐┬ ┬┌┬┐  ╔═╗┌─┐┬─┐┌┬┐┬┌─┐┬  ┌─┐
-║═╬╗│ │├─┤│││ │ │ ││││  ╠═╝├─┤├┬┘ │ ││  │  ├┤ 
-╚═╝╚└─┘┴ ┴┘└┘ ┴ └─┘┴ ┴  ╩  ┴ ┴┴└─ ┴ ┴└─┘┴─┘└─┘
-  ╔═╗┬ ┬┌─┐┬─┐┌┬┐  ╔═╗┌─┐┌┬┐┬┌┬┐┬┌─┐┌─┐┬─┐    
-  ╚═╗│││├─┤├┬┘│││  ║ ║├─┘ │ │││││┌─┘├┤ ├┬┘    
-  ╚═╝└┴┘┴ ┴┴└─┴ ┴  ╚═╝┴   ┴ ┴┴ ┴┴└─┘└─┘┴└─    
+     ________ __________  _________________   
+      \_____  \\______   \/   _____/\_____  \  
+       /  / \  \|     ___/\_____  \  /   |   \ 
+      /   \_/.  \    |    /        \/    |    \
+      \_____\ \_/____|   /_______  /\_______  /
+             \__>                \/         \/   
+                   
+    ╔═╗ ┬ ┬┌─┐┌┐┌┌┬┐┬ ┬┌┬┐  ╔═╗┌─┐┬─┐┌┬┐┬┌─┐┬  ┌─┐
+    ║═╬╗│ │├─┤│││ │ │ ││││  ╠═╝├─┤├┬┘ │ ││  │  ├┤ 
+    ╚═╝╚└─┘┴ ┴┘└┘ ┴ └─┘┴ ┴  ╩  ┴ ┴┴└─ ┴ ┴└─┘┴─┘└─┘
+      ╔═╗┬ ┬┌─┐┬─┐┌┬┐  ╔═╗┌─┐┌┬┐┬┌┬┐┬┌─┐┌─┐┬─┐    
+      ╚═╗│││├─┤├┬┘│││  ║ ║├─┘ │ │││││┌─┘├┤ ├┬┘    
+      ╚═╝└┴┘┴ ┴┴└─┴ ┴  ╚═╝┴   ┴ ┴┴ ┴┴└─┘└─┘┴└─    
 
 
 github.com/litepresence & github.com/SquidKid-deluxe present:
@@ -56,6 +56,7 @@ from qtradex.common.utilities import NonceSafe, it, print_table, sigfig
 from qtradex.core import backtest
 from qtradex.optimizers.utilities import (bound_neurons, end_optimization,
                                           plot_scores, print_tune)
+from qtradex.private.wallet import PaperWallet
 
 NIL = 10 / 10**10
 
@@ -81,23 +82,6 @@ class QPSOoptions:
         self.neurons = []
         self.show_terminal = True
         self.print_tune = False
-        # path to write tunes to
-        self.append_tune = ""
-
-
-def value_to_xterm_color(value):
-    if not (0 <= value <= 1):
-        raise ValueError("Value must be between 0 and 1.")
-
-    # Calculate the red and green components
-    red = int(196 * (1 - value))  # 196 is the xterm color code for red
-    green = int(46 * value)  # 46 is the xterm color code for green
-
-    # Combine the colors into a single xterm color code
-    # The formula for combining is: 16 + (red * 36) + (green * 6)
-    color_code = 16 + (red * 36) + (green * 6)
-
-    return color_code
 
 
 def printouts(kwargs):
@@ -167,7 +151,9 @@ def printouts(kwargs):
 
 
 class QPSO:
-    def __init__(self, data, wallet, options=None):
+    def __init__(self, data, wallet=None, options=None):
+        if wallet is None:
+            wallet = PaperWallet({data.asset:0, data.currency:1})
         self.options = options if options is not None else QPSOoptions()
         self.data = data
         self.wallet = wallet
@@ -348,6 +334,7 @@ class QPSO:
                     if isinstance(bot.tune[neuron], float):
                         bot.tune[neuron] *= path
                         bot.tune[neuron] += (random() - 0.5) / 1000
+                        
                     elif isinstance(bot.tune[neuron], int):
                         bot.tune[neuron] = int(
                             bot.tune[neuron] + randint(-2, 2)

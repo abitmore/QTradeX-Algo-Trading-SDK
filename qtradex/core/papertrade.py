@@ -5,6 +5,7 @@ from matplotlib import pyplot as plt
 from qtradex.common.utilities import it
 from qtradex.core.backtest import backtest, trade
 from qtradex.private.signals import Thresholds
+from qtradex.private.wallet import PaperWallet
 from qtradex.public.utilities import fetch_composite_data
 
 
@@ -61,7 +62,7 @@ def print_trade(data, initial_balances, new_balances, operation, now, last_trade
     print("\n")
 
 
-def papertrade(bot, data, wallet, tick_size=60*15, tick_pause=60*5):
+def papertrade(bot, data, wallet=None, tick_size=60*15, tick_pause=60*5):
     """
     Simulate trading using a bot with live data updates, allowing for paper trading
     without executing real trades. This function continuously fetches new data,
@@ -77,6 +78,8 @@ def papertrade(bot, data, wallet, tick_size=60*15, tick_pause=60*5):
     Returns:
     None
     """
+    if wallet is None:
+        wallet = PaperWallet({data.asset:0, data.currency:1})
     print("\033c")
     now = int(time.time())
     data.end = now

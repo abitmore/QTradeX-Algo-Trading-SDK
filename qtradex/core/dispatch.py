@@ -9,6 +9,7 @@ from qtradex.common.utilities import it
 from qtradex.core.tune_manager import choose_tune
 from qtradex.core.tune_manager import load_tune as load_from_manager
 from qtradex.core.ui_utilities import get_number, logo, select
+from qtradex.private.wallet import PaperWallet
 
 
 def load_tune(bot):
@@ -27,17 +28,14 @@ def load_tune(bot):
     elif choice == 2:
         return bot.tune
     elif choice == 3:
-        if hasattr(bot, "drop"):
-            return {k: v[1] for k, v in bot.clamps.items()}
-        else:
-            print(it("red", "Warning:"), "bot has no `drop` tune, using `bot.tune`...")
-            time.sleep(2)
-            return bot.tune
+        return {k: v[1] for k, v in bot.clamps.items()}
     elif choice == 4:
         return choose_tune(bot, "tune")
 
 
-def dispatch(bot, data, wallet):
+def dispatch(bot, data, wallet=None):
+    if wallet is None:
+        wallet = PaperWallet({data.asset: 0, data.currency: 1})
     logo(animate=True)
 
     bot.tune = load_tune(bot)
@@ -52,13 +50,22 @@ def dispatch(bot, data, wallet):
     if choice == 0:
         qx.core.backtest(bot, data, wallet)
     elif choice == 1:
-        options = ["QPSO", "LSGA"]
+        options = [
+            "QPSO (Quantum Particle Swarm Optimizer)",
+            "LSGA (Local Search Genetic Algorithm)",
+            "IPSE (Iterative Parametric Space Expansion)",
+            "Manual Tuner"
+        ]
         choice = select(options)
 
         if choice == 0:
             optimizer = qx.optimizers.QPSO(data, wallet)
         elif choice == 1:
             optimizer = qx.optimizers.LSGA(data, wallet)
+        elif choice == 2:
+            optimizer = qx.optimizers.IPSE(data, wallet)
+        elif choice == 3:
+            optimizer = qx.optimizers.MouseWheelTuner(data, wallet)
         optimizer.optimize(bot)
     elif choice == 2:
         qx.core.papertrade(bot, data, wallet)

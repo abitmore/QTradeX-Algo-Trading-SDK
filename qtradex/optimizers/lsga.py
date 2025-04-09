@@ -49,6 +49,7 @@ from qtradex.core import backtest
 from qtradex.optimizers.qpso import QPSO, QPSOoptions
 from qtradex.optimizers.utilities import (bound_neurons, end_optimization,
                                           merge, print_tune)
+from qtradex.private.wallet import PaperWallet
 
 
 class LSGAoptions(QPSOoptions):
@@ -162,7 +163,9 @@ def retest_process(bot, data, wallet, todo, done):
 
 
 class LSGA(QPSO):
-    def __init__(self, data, wallet, options=None):
+    def __init__(self, data, wallet=None, options=None):
+        if wallet is None:
+            wallet = PaperWallet({data.asset:0, data.currency:1})
         self.options = options if options is not None else LSGAoptions()
         self.data = data
         self.wallet = wallet
