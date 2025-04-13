@@ -1,6 +1,7 @@
 import json
 import math
 import random
+from copy import deepcopy
 
 import matplotlib.pyplot as plt
 import matplotlib.style as mplstyle
@@ -64,8 +65,9 @@ def end_optimization(best_bots, show):
         name = f"BEST {list(score.keys())[n].upper()} TUNE"
         msg += "## " + name + "\n\n"
         msg += print_tune(score, bot, render=True)
-        bot.tune = {"tune":bot.tune, "results":score}
-        qx.core.tune_manager.save_tune(bot, name)
+        save_bot = deepcopy(bot)
+        save_bot.tune = {"tune":bot.tune.copy(), "results":score}
+        qx.core.tune_manager.save_tune(save_bot, name)
     if show:
         print(msg)
 
@@ -99,6 +101,7 @@ def plot_scores(historical, historical_tests, cdx):
         return
     plt.clf()
     n_coords = len(historical[0][1])
+    coords = list(historical[0][1].keys())
     # initialize empty lists
     lines = [[] for _ in range(n_coords)]
     x_list = []
@@ -109,8 +112,8 @@ def plot_scores(historical, historical_tests, cdx):
             for idx in range(n_coords):
                 lines[idx].append(lines[idx][-1])
 
-        for idx, (score, _) in enumerate(moment[1]):
-            lines[idx].append(list(score.values())[idx])
+        for coord, (score, _) in moment[1].items():
+            lines[coords.index(coord)].append(score[coord])
     x_list.append(cdx)
     for idx in range(n_coords):
         lines[idx].append(lines[idx][-1])
@@ -122,14 +125,14 @@ def plot_scores(historical, historical_tests, cdx):
 
     x_list_tests = [i[0] for i in historical_tests]
 
-    for idx in range(n_coords):
+    for idx, coord in enumerate(coords):
         plt.subplot(width, height, idx + 1)
-        plt.title(list(historical[0][1][0][0].keys())[idx])
+        plt.title(coord)
         plt.plot(x_list, lines[idx], color="green")
         plt.xscale("log")
         plt.scatter(
             x_list_tests,
-            [i[1][idx] for i in historical_tests],
+            [i[1][coord] for i in historical_tests],
             color="yellow",
         )
     plt.tight_layout()

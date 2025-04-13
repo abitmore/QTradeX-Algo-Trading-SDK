@@ -56,7 +56,7 @@ API = "BitShares Public API Nodes"
 # ======================================================================
 ATTEMPTS = 30
 TIMEOUT = 480
-DETAIL = False
+DETAIL = True
 
 def parse_market_history(
     graphene_history: List[Dict], period: int, precision: Dict[str, int]

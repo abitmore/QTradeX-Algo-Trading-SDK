@@ -1,9 +1,11 @@
 import time
 
 from matplotlib import pyplot as plt
-from qtradex.common.utilities import it
+from qtradex.common.utilities import it, trace
 from qtradex.core.backtest import backtest, trade
+from qtradex.core.base_bot import Info
 from qtradex.core.papertrade import print_trade
+from qtradex.plot.utilities import unix_to_stamp
 from qtradex.private.execution import Execution
 from qtradex.private.signals import Buy, Sell, Thresholds
 from qtradex.private.wallet import PaperWallet, Wallet
@@ -14,15 +16,16 @@ from qtradex.public.utilities import fetch_composite_data
 WIDE = False
 BROADCAST = True
 
+
 def live(
     bot,
     data,
     api_key,
     api_secret,
     dust,
-    tick_size=60*15,
-    tick_pause=60*15,
-    cancel_pause=3600*2,
+    tick_size=60 * 15,
+    tick_pause=60 * 15,
+    cancel_pause=3600 * 2,
 ):
     """
     Simulate trading using a bot with live data updates, allowing for paper trading
@@ -46,6 +49,7 @@ def live(
     Returns:
     None
     """
+    bot.info = Info({"mode": "live"})
     print("\033c")
 
     execution = Execution(data.exchange, data.asset, data.currency, api_key, api_secret)
@@ -68,7 +72,9 @@ def live(
 
     print("Fetching data...")
     # fetch new ten minute candle data with this exchange and pair
-    data = fetch_composite_data(data, new_size=tick_size)
+    data, raw_15m = fetch_composite_data(data, new_size=tick_size)
+    bot.info._set("live_trades", execution.fetch_my_trades())
+    bot.info._set("live_data", raw_15m)
     # make the matplotlib plot update live
     plt.ion()
     print("Running initial backtest...")
@@ -79,6 +85,9 @@ def live(
         block=False,
         return_states=True,
         range_periods=False,
+        fine_data=raw_15m,
+        always_trade="smart",
+        show=False,
     )
 
     # update the plot
@@ -103,8 +112,17 @@ def live(
         # no need to to worry about popping old candles and appending new ones here.
         data.candle_size = data.base_size
         print("Fetching fresh data...")
-        data.update_candles(now - window, now)
-        data = fetch_composite_data(data, new_size=tick_size)
+        while True:
+            try:
+                data.update_candles(now - window, now)
+                data, raw_15m = fetch_composite_data(data, new_size=tick_size)
+                break
+            except Exception as error:
+                print(trace(error))
+                print("Fetching data failed!  retrying in 5 seconds...")
+                time.sleep(5)
+        bot.info._set("live_trades", execution.fetch_my_trades())
+        bot.info._set("live_data", raw_15m)
 
         # plot the latest data
         # technically, this runs the strategy at the current tick for us, so we could
@@ -117,6 +135,9 @@ def live(
             PaperWallet({data.asset: 1, data.currency: 1}),
             block=False,
             range_periods=False,
+            fine_data=raw_15m,
+            always_trade="smart",
+            show=False,
         )
         plt.pause(0.1)
 
@@ -172,9 +193,17 @@ def live(
                         operation.buying /= 2
                     if amount := wallet[data.currency]:
                         amount /= operation.buying
-                        print(execution.create_order("buy", "limit", amount, operation.buying))
+                        print(
+                            execution.create_order(
+                                "buy", "limit", amount, operation.buying
+                            )
+                        )
                     if amount := wallet[data.asset]:
-                        print(execution.create_order("sell", "limit", amount, operation.selling))
+                        print(
+                            execution.create_order(
+                                "sell", "limit", amount, operation.selling
+                            )
+                        )
 
                 elif (
                     isinstance(operation, Buy)
@@ -183,12 +212,19 @@ def live(
                     if WIDE:
                         operation.price /= 2
                     amount /= operation.price
-                    print(execution.create_order("buy", "limit", amount, operation.price))
+                    print(
+                        execution.create_order("buy", "limit", amount, operation.price)
+                    )
 
-                elif isinstance(operation, Sell) and (amount := wallet[data.asset]) > dust:
+                elif (
+                    isinstance(operation, Sell)
+                    and (amount := wallet[data.asset]) > dust
+                ):
                     if WIDE:
                         operation.price *= 2
-                    print(execution.create_order("sell", "limit", amount, operation.price))
+                    print(
+                        execution.create_order("sell", "limit", amount, operation.price)
+                    )
 
             time.sleep(3)
             print("Refreshing balances")

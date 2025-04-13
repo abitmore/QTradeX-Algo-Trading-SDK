@@ -80,7 +80,7 @@ def preprocess_states(states, pair):
     new_states["detailed_losses"] = []
 
     for trade in states["trades"][1:]:
-        data_dict = {"roi": trade.profit, "unix": trade.unix, "price": trade.price}
+        data_dict = {"roi": trade.profit, "unix": trade.unix, "price": trade.price, "object":trade}
         if trade.profit >= 1:
             key = "wins"
         else:

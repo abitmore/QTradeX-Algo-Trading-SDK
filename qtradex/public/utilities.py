@@ -159,10 +159,15 @@ def quantize_unix(unix_array, candle_size):
 
 def merge_candles(candles, candle_size):
     # Quantize the unix times for both dictionaries
-    candles = [{**batch, "unix":quantize_unix(batch["unix"], candle_size)} for batch in candles]
+    candles = [
+        {**batch, "unix": quantize_unix(batch["unix"], candle_size)}
+        for batch in candles
+    ]
 
     # Find the unique unix values from both dictionaries
-    unique_unix = np.sort(np.unique(np.concatenate([batch["unix"] for batch in candles])))
+    unique_unix = np.sort(
+        np.unique(np.concatenate([batch["unix"] for batch in candles]))
+    )
 
     # Initialize the merged dictionary
     merged_candles = {
@@ -173,6 +178,8 @@ def merge_candles(candles, candle_size):
         "close": np.zeros_like(unique_unix, dtype=float),
         "volume": np.zeros_like(unique_unix, dtype=float),
     }
+    if any("candle_size" in i for i in candles):
+        merged_candles["candle_size"] = np.zeros_like(unique_unix, dtype=float)
 
     # Merge and handle conflicts by prioritizing candles1
     for i, unix in enumerate(unique_unix):
@@ -182,6 +189,7 @@ def merge_candles(candles, candle_size):
         vol_vals = []
         open_val = None
         close_val = None
+        candle_sizes = []
 
         for batch in candles:
             # Handle batch prices at the current unix time
@@ -193,6 +201,8 @@ def merge_candles(candles, candle_size):
                 if open_val is None:
                     open_val = batch["open"][idx]
                 close_val = batch["close"][idx]
+                if "candle_size" in batch:
+                    candle_sizes.append(batch["candle_size"][idx])
 
         # Set the values for the merged dictionary
         if close_val is not None:
@@ -208,6 +218,8 @@ def merge_candles(candles, candle_size):
             merged_candles["open"][i] = close_val
             merged_candles["close"][i] = close_val
             merged_candles["volume"][i] = 0
+        if candle_sizes:
+            merged_candles["candle_size"][i] = max(candle_sizes)
 
     return merged_candles
 
@@ -279,9 +291,11 @@ def create_candles(data, width=86400, stride=600):
             "volume": np.sum(datapoints[:, 2]),
             "unix": unix,
         }
+        if datapoints.shape[1] > 3:
+            current_candle["candle_size"] = np.max(datapoints[:, 3])
         candles.append(current_candle)
 
-    return {k:np.array(v) for k, v in rotate(candles).items()}
+    return {k: np.array(v) for k, v in rotate(candles).items()}
 
 
 def reaggregate(data, candle_size, stride=None):
@@ -289,23 +303,31 @@ def reaggregate(data, candle_size, stride=None):
         itertools.chain(
             *[
                 [
-                    [unix, _open, volume / 4],
-                    [unix, high, volume / 4],
-                    [unix, low, volume / 4],
-                    [unix, close, volume / 4],
+                    [unix, _open, volume / 4, size],
+                    [unix, high, volume / 4, size],
+                    [unix, low, volume / 4, size],
+                    [unix, close, volume / 4, size],
                 ]
-                for unix, high, low, _open, close, volume in zip(
+                for unix, high, low, _open, close, volume, size in zip(
                     data["unix"],
                     data["high"],
                     data["low"],
                     data["open"],
                     data["close"],
                     data["volume"],
+                    data.get(
+                        "candle_size",
+                        np.array(
+                            [data["unix"][1] - data["unix"][0]] * len(data["unix"])
+                        ),
+                    ),
                 )
             ]
         )
     )
-    return create_candles(discrete, candle_size, stride if stride is not None else candle_size)
+    return create_candles(
+        discrete, candle_size, stride if stride is not None else candle_size
+    )
 
 
 def fetch_composite_data(data, new_size):
@@ -369,15 +391,20 @@ def fetch_composite_data(data, new_size):
         raise
     except:
         high_res = {}
+    else:
+        high_res = {
+            **high_res,
+            "candle_size": np.array([new_size] * len(high_res["unix"])),
+        }
     # now we have high resolution data between high_res.begin and high_res.end
     # if that isn't all that we were asked for then we need to gather more data,
-    # but this time with a smaller candle size so we can get more data.
+    # but this time with a bigger candle size so we can get more data.
     # However, the exchange may not have much more, thus, we need to check a steadily
     # increasing candle size until we get enough data, interpolating and appending to
     # high_res each time
 
     end = high_res["unix"][0] if high_res else end
-    # minute, ten minute, 15 minute, hour, two hour, four hour, day, week
+    # minute, ten minute, hour, two hour, four hour, day, week
     valid_sizes = [
         60,
         10 * 60,
@@ -423,7 +450,18 @@ def fetch_composite_data(data, new_size):
 
             if high_res:
                 # merge with the other data we already have
-                high_res = merge_candles([high_res, inter_data], new_size)
+                high_res = merge_candles(
+                    [
+                        high_res,
+                        {
+                            **inter_data,
+                            "candle_size": np.array(
+                                [fetch_size] * len(inter_data["unix"])
+                            ),
+                        },
+                    ],
+                    new_size,
+                )
             else:
                 high_res = inter_data
 
@@ -448,16 +486,16 @@ def fetch_composite_data(data, new_size):
     # plt.scatter(high_res["unix"], high_res["low"], color="gray")
     # plt.scatter(high_res["unix"], high_res["close"], color="gray")
 
-    high_res = reaggregate(high_res, data.candle_size, stride=new_size)
+    re_agg = reaggregate(high_res, data.candle_size, stride=new_size)
 
-    # plt.scatter(high_res["unix"], high_res["open"], color="red", marker="+")
-    # plt.scatter(high_res["unix"], high_res["high"], color="orange", marker="+")
-    # plt.scatter(high_res["unix"], high_res["low"], color="yellow", marker="+")
-    # plt.scatter(high_res["unix"], high_res["close"], color="green", marker="+")
+    # plt.scatter(re_agg["unix"], re_agg["open"], color="red", marker="+")
+    # plt.scatter(re_agg["unix"], re_agg["high"], color="orange", marker="+")
+    # plt.scatter(re_agg["unix"], re_agg["low"], color="yellow", marker="+")
+    # plt.scatter(re_agg["unix"], re_agg["close"], color="green", marker="+")
     # plt.show()
 
     # assign our aggregated data to the data class we were given so that it's
     # in the format the rest of QTradeX expects it to be in
-    data.raw_candles = high_res
+    data.raw_candles = re_agg
     data.candle_size = new_size
-    return data
+    return data, high_res

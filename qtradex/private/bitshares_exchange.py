@@ -67,6 +67,58 @@ class BitsharesExchange:
         if not broker(order) and not DEV:
             raise ValueError("Failed to authenticate!")
 
+    def fetch_my_trades(self, symbol):
+        """
+        This function has to take the bitshares_rpc style fill orders and make them ccxt style:
+        {
+            'info':         { ... },                    // the original decoded JSON as is
+            'id':           '12345-67890:09876/54321',  // string trade id
+            'timestamp':    1502962946216,              // Unix timestamp in milliseconds
+            'symbol':       'ETH/BTC',                  // symbol
+            'side':         'buy',                      // direction of the trade, 'buy' or 'sell'
+            'takerOrMaker': 'taker',                    // string, 'taker' or 'maker'
+            'price':        0.06917684,                 // float price in quote currency
+            'amount':       1.5,                        // amount of base currency
+            'cost':         0.10376526,                 // total cost, `price * amount`,
+            'fees': [],
+        }
+        from this:
+        {
+            "exchange_order_id": str,
+            "unix": float,
+            "sequence": int,
+            "fee": fee,
+            "is_maker": bool,
+            "price": float,
+            "amount": float,
+            "type": "SELL" / "BUY",
+        }
+        """
+        ret = []
+        try:
+            fills = bitshares_rpc.rpc_fill_order_history(
+                self.rpc, self.account_id, *symbol.split("/")
+            )
+        except RuntimeError:
+            self.rpc = bitshares_rpc.wss_handshake()
+            return self.fetch_my_trades(symbol)
+
+        for fill in fills:
+            new_fill = {
+                "info": fill,
+                "id": fill["exchange_order_id"],
+                "timestamp": fill["unix"] * 1000,
+                "symbol": symbol,
+                "side": fill["type"].lower(),
+                "takerOrMaker": "maker" if fill["is_maker"] else "taker",
+                "price": fill["price"],
+                "amount": fill["amount"],
+                "cost": fill["price"] * fill["amount"],
+                "fees": [fill["fee"]],
+            }
+            ret.append(new_fill)
+        return ret
+
     def create_order(self, symbol, order_type, side, amount, price):
         order = self._prototype(symbol)
 

@@ -141,6 +141,16 @@ class Execution:
         except Exception as e:
             return str(e)
 
+    def fetch_my_trades(self):
+        """
+        Fetch all open orders for a given self.symbol.
+        """
+        try:
+            open_orders = self.exchange.fetch_my_trades(self.symbol)
+            return open_orders
+        except Exception as e:
+            return str(e)
+
     def fetch_ticker(self, symbol, params=None):
         """
         Fetch the price ticker for a given self.symbol.

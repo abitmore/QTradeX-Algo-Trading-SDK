@@ -37,13 +37,29 @@ def unix_to_stamp(unix):
         return [datetime.fromtimestamp(i) for i in unix]
 
 
-def plot(data, states, indicators, block, indicator_fmt, style="dark_background"):
+def plot(
+    info,
+    data,
+    states,
+    indicators,
+    block,
+    indicator_fmt,
+    style="dark_background",
+):
     """
     plotting of buy/sell with win/loss line plotting
     buy/sell are green/red triangles
     plotting of high/low/open/close
     plotting of indicators (dict of indicator keys to be plotted and color)
     balance plotting follows price on token not held
+
+    During papertrade and live sessions, the plotting is a bit different.
+
+    Notably:
+    - the red and green `open - close` clouds are not displayed
+    - an extra argument, `raw` is given as raw high-frequency data and the high/low for
+      that is plotted instead
+    - past live trades are passed in and no "backtest trades" are plotted past the earliest
     """
     mplstyle.use(style)
 
@@ -66,52 +82,128 @@ def plot(data, states, indicators, block, indicator_fmt, style="dark_background"
         alpha=0.3,
         label="High/Low",
     )
-    # Fill between for open > close
-    axes[0].fill_between(
-        timestamps,
-        states["open"],
-        states["close"],
-        where=expand_bools(states["open"] > states["close"], side="right"),
-        color=(1, 0, 0, 0.3),  # Red for open > close
-    )
+    if info["mode"] not in ["live", "papertrade"]:
+        # Fill between for open > close
+        axes[0].fill_between(
+            timestamps,
+            states["open"],
+            states["close"],
+            where=expand_bools(states["open"] > states["close"], side="right"),
+            color=(1, 0, 0, 0.3),  # Red for open > close
+        )
 
-    # Fill between for open < close
-    axes[0].fill_between(
-        timestamps,
-        states["open"],
-        states["close"],
-        where=expand_bools(states["open"] < states["close"], side="right"),
-        color=(0, 1, 0, 0.3),  # Green for open < close
-    )
+        # Fill between for open < close
+        axes[0].fill_between(
+            timestamps,
+            states["open"],
+            states["close"],
+            where=expand_bools(states["open"] < states["close"], side="right"),
+            color=(0, 1, 0, 0.3),  # Green for open < close
+        )
+    if "live_data" in info:
+        high_res = info["live_data"]
+        mindx = np.searchsorted(high_res["unix"], states["unix"][0], side="left")
+        high_res = {k: v[-mindx:] for k, v in high_res.items()}
+
+        # Fill between for open > close
+        axes[0].fill_between(
+            unix_to_stamp(high_res["unix"]),
+            high_res["high"],
+            high_res["low"],
+            color=(1, 1, 1, 0.8),  # white green
+            label="high > low",
+        )
+
+        # Fill between for open > close
+        axes[0].fill_between(
+            unix_to_stamp(high_res["unix"]),
+            high_res["open"],
+            high_res["close"],
+            where=expand_bools(high_res["open"] > high_res["close"], side="right"),
+            color=(1, 0.8, 0.8, 1),  # white red
+            label="open > close",
+        )
+
+        # Fill between for open < close
+        axes[0].fill_between(
+            unix_to_stamp(high_res["unix"]),
+            high_res["open"],
+            high_res["close"],
+            where=expand_bools(high_res["open"] < high_res["close"], side="right"),
+            color=(0.8, 0.8, 1, 1),  # white blue
+            label="open < close",
+        )
+    if "live_trades" in info:
+        print(info["live_trades"])
+        live_trades = [(unix_to_stamp(i["timestamp"]/1000), i["price"], i["side"]) for i in info["live_trades"]]
+        buys = [(i[0], i[1]) for i in live_trades if i[2] == "buy"]
+        sells = [(i[0], i[1]) for i in live_trades if i[2] == "sell"]
+        if buys:
+            axes[0].scatter(*zip(*buys), c="yellow", marker="^", s=120)
+        if sells:
+            axes[0].scatter(*zip(*sells), c="yellow", marker="v", s=120)
 
     # plot indicators
     plot_indicators(axes, timestamps, states, indicators, indicator_fmt)
 
     if len(states["trades"]) > 1:
-        # plot win / loss lines
-        p_op = states["trades"][0]
-        for op in states["trades"][1:]:
-            color = "lime" if op.profit >= 1 else "tomato"
-            axes[0].plot(
-                unix_to_stamp([p_op.unix, op.unix]), [p_op.price, op.price], color=color, linewidth=2
-            )
-            p_op = op
-
-        # plot trade triangles
-        buys = zip(
-            *[[unix_to_stamp(op.unix), op.price] for op in states["trades"] if isinstance(op, Buy)]
-        )
-        sells = zip(
-            *[[unix_to_stamp(op.unix), op.price] for op in states["trades"] if isinstance(op, Sell)]
-        )
-
-        axes[0].scatter(*buys, c="lime", marker="^", s=80)
-        axes[0].scatter(*sells, c="tomato", marker="v", s=80)
+        plot_trades(axes[0], states)
 
     for ax in axes[:-1]:
         ax.legend()
-        ax.tick_params(axis='x', labelrotation=45)
+        ax.tick_params(axis="x", labelrotation=45)
 
+    plot_balances(axes[-1], timestamps, states, data)
+
+    plotmotion(block)
+    return axes
+
+
+def plot_trades(axis, states):
+    # plot win / loss lines
+    p_op = states["trades"][0]
+    for op in states["trades"][1:]:
+        color = "lime" if op.profit >= 1 else "tomato"
+        axis.plot(
+            unix_to_stamp([p_op.unix, op.unix]),
+            [p_op.price, op.price],
+            color=color,
+            linewidth=2,
+        )
+        p_op = op
+
+    # plot trade triangles
+    buys = list(zip(
+        *[
+            [unix_to_stamp(op.unix), op.price]
+            for op in states["trades"]
+            if isinstance(op, Buy)
+        ]
+    ))
+    sells = list(zip(
+        *[
+            [unix_to_stamp(op.unix), op.price]
+            for op in states["trades"]
+            if isinstance(op, Sell)
+        ]
+    ))
+    overrides = list(zip(
+        *[
+            [unix_to_stamp(op.unix), op.price]
+            for op in states["trades"]
+            if op.is_override
+        ]
+    ))
+
+    if overrides:
+        axis.scatter(*overrides, c="yellow", marker="o", s=120)
+    if buys:
+        axis.scatter(*buys, c="lime", marker="^", s=80)
+    if sells:
+        axis.scatter(*sells, c="tomato", marker="v", s=80)
+
+
+def plot_balances(axis, timestamps, states, data):
     # plot balances chart
     balances = rotate(states["balances"])
 
@@ -129,7 +221,7 @@ def plot(data, states, indicators, block, indicator_fmt, style="dark_background"
     for idx, (token, balance) in list(enumerate(balances.items())):
         # handle parasite axes
         if ax is None:
-            ax = axes[n_levels - 1]
+            ax = axis
         else:
             ax = ax.twinx()
         # label the axis
@@ -151,12 +243,8 @@ def plot(data, states, indicators, block, indicator_fmt, style="dark_background"
     ax.legend(lines, labels)
     ax.set_title("Balances")
 
-    plotmotion(block)
-    return axes
-
 
 def compute_potential_balances(asset_balance, currency_balance, price):
-    # plt.clf()
     # Convert inputs to numpy arrays for efficient computation
     asset_balance = np.array(asset_balance)
     currency_balance = np.array(currency_balance)
@@ -176,15 +264,4 @@ def compute_potential_balances(asset_balance, currency_balance, price):
         asset_balance > NIL, asset_balance, potential_assets
     )
 
-    # plt.subplot(211)
-    # plt.plot(asset_balance, linestyle="-", label="orig")
-    # plt.plot(potential_assets, linestyle="--", label="potential")
-    # plt.plot(merged_asset_balance, linestyle=":", label="merged")
-    # plt.legend()
-    # plt.subplot(212)
-    # plt.plot(currency_balance, linestyle="-", label="orig")
-    # plt.plot(potential_currency, linestyle="--", label="potential")
-    # plt.plot(merged_currency_balance, linestyle=":", label="merged")
-    # plt.legend()
-    # plt.show()
     return merged_asset_balance, merged_currency_balance

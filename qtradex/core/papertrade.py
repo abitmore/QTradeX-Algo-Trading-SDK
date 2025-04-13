@@ -4,6 +4,8 @@ from datetime import datetime, timezone
 from matplotlib import pyplot as plt
 from qtradex.common.utilities import it
 from qtradex.core.backtest import backtest, trade
+from qtradex.core.base_bot import Info
+from qtradex.plot.utilities import unix_to_stamp
 from qtradex.private.signals import Thresholds
 from qtradex.private.wallet import PaperWallet
 from qtradex.public.utilities import fetch_composite_data
@@ -62,7 +64,7 @@ def print_trade(data, initial_balances, new_balances, operation, now, last_trade
     print("\n")
 
 
-def papertrade(bot, data, wallet=None, tick_size=60*15, tick_pause=60*5):
+def papertrade(bot, data, wallet=None, tick_size=60 * 15, tick_pause=60 * 5):
     """
     Simulate trading using a bot with live data updates, allowing for paper trading
     without executing real trades. This function continuously fetches new data,
@@ -78,8 +80,9 @@ def papertrade(bot, data, wallet=None, tick_size=60*15, tick_pause=60*5):
     Returns:
     None
     """
+    bot.info = Info({"mode": "papertrade"})
     if wallet is None:
-        wallet = PaperWallet({data.asset:0, data.currency:1})
+        wallet = PaperWallet({data.asset: 0, data.currency: 1})
     print("\033c")
     now = int(time.time())
     data.end = now
@@ -97,11 +100,21 @@ def papertrade(bot, data, wallet=None, tick_size=60*15, tick_pause=60*5):
                 bot.tune[k] = int(v * (86400 / tick_size))
 
     # fetch new ten minute candle data with this exchange and pair
-    data = fetch_composite_data(data, new_size=tick_size)
+    data, raw_15m = fetch_composite_data(data, new_size=tick_size)
+    bot.info._set("live_data", raw_15m)
+
     # make the matplotlib plot update live
     plt.ion()
     _, raw_states, _ = backtest(
-        bot, data, wallet, block=False, return_states=True, range_periods=False
+        bot,
+        data,
+        wallet,
+        block=False,
+        return_states=True,
+        range_periods=False,
+        fine_data=raw_15m,
+        always_trade="smart",
+        show=False,
     )
 
     # update the plot
@@ -125,13 +138,23 @@ def papertrade(bot, data, wallet=None, tick_size=60*15, tick_pause=60*5):
         # no need to to worry about popping old candles and appending new ones here.
         data.candle_size = data.base_size
         data.update_candles(now - window, now)
-        data = fetch_composite_data(data, new_size=tick_size)
+        data, raw_15m = fetch_composite_data(data, new_size=tick_size)
+        bot.info._set("live_data", raw_15m)
 
         # plot the latest data
         # technically, this runs the strategy at the current tick for us, so we could
         # just "execute" the most recent operation, but if the strategy relied on wallet
         # balances, we'd have to re-calculate the strategy anyway
-        backtest(bot, data, wallet.copy(), block=False, range_periods=False)
+        backtest(
+            bot,
+            data,
+            wallet.copy(),
+            block=False,
+            range_periods=False,
+            fine_data=raw_15m,
+            always_trade="smart",
+            show=False,
+        )
         plt.pause(0.1)
 
         # reset the bot

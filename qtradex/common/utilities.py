@@ -22,6 +22,7 @@ litepresence 2019
 #
 # STANDARD MODULES
 import functools
+import json
 import os
 import time
 import traceback
@@ -216,6 +217,33 @@ def unformat_timeframe(timeframe):
 
 # FILES AND LOGGING
 # ======================================================================
+def read_file(path):
+    """
+    Read the contents of a file.
+
+    Parameters:
+    - path: The path to the file to read.
+
+    Returns:
+    - The contents of the file as a string.
+    """
+    with open(path, "r") as handle:
+        data = handle.read()
+    return data
+
+
+def write_file(path, contents):
+    """
+    Write contents to a file in JSON format.
+
+    Parameters:
+    - path: The path to the file to write.
+    - contents: The data to write to the file.
+    """
+    with open(path, "w") as handle:
+        handle.write(json.dumps(contents, indent=1))
+
+
 def race_write(doc="", text=""):
     """
     Concurrent Write to File Operation

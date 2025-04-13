@@ -7,6 +7,7 @@ class Buy:
         self.price = price
         self.unix = 0
         self.profit = 0
+        self.is_override = True
 
 
 class Sell:
@@ -15,6 +16,7 @@ class Sell:
         self.price = price
         self.unix = 0
         self.profit = 0
+        self.is_override = True
 
 
 class Thresholds:

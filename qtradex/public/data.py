@@ -81,6 +81,8 @@ class Data:
             # Default to now
             self.end = int(time.time())
 
+        self.days = (self.end-self.begin)/86400
+
         # Add constants to self space
         self.exchange = exchange
         self.asset = asset
@@ -102,15 +104,19 @@ class Data:
         self.intermediary = intermediary
 
         if intermediary is None:
-            self.raw_candles = self.retrieve_and_cache_candles(self.candle_size, 
-                self.asset, self.currency
+            self.raw_candles = self.retrieve_and_cache_candles(
+                self.candle_size, self.asset, self.currency
             )
         else:
             if DETAIL:
                 print(f"Using {intermediary} to create implied price...")
             self.raw_candles = implied(
-                self.retrieve_and_cache_candles(self.candle_size, self.asset, self.intermediary),
-                self.retrieve_and_cache_candles(self.candle_size, self.intermediary, self.currency),
+                self.retrieve_and_cache_candles(
+                    self.candle_size, self.asset, self.intermediary
+                ),
+                self.retrieve_and_cache_candles(
+                    self.candle_size, self.intermediary, self.currency
+                ),
             )
 
         if np.any(self.raw_candles["unix"]):
@@ -207,17 +213,19 @@ class Data:
             json_ipc("min_time.json", "{}")
             min_time = {}
         index_key = str((self.exchange, self.pool, candle_size, asset, currency))
-        rev_index_key = str(
-            (self.exchange, self.pool, candle_size, currency, asset)
-        )
+        rev_index_key = str((self.exchange, self.pool, candle_size, currency, asset))
         total_time = [self.begin, self.end]
         raw_candles = None
         # if the exchange hasn't been queried before for this pair or its inverse
         if index_key not in index and rev_index_key not in index:
             # gather data
             if DETAIL:
-                print(f"gather: {total_time}  use_cache: N/A  @ {candle_size}, {index_key}")
-            raw_candles = self.gather_data(candle_size, self.begin, self.end, asset, currency)
+                print(
+                    f"gather: {total_time}  use_cache: N/A  @ {candle_size}, {index_key}"
+                )
+            raw_candles = self.gather_data(
+                candle_size, self.begin, self.end, asset, currency
+            )
         else:
             inverted = rev_index_key in index
             index_key = rev_index_key if inverted else index_key
@@ -227,7 +235,7 @@ class Data:
                 print(time_range)
                 print(total_time)
             gather = None
-            use_cache = None
+            use_cache = False
             erase_cache = False
             # completely before or after what we need
             if time_range[1] < self.begin or time_range[0] > self.end:
@@ -245,21 +253,21 @@ class Data:
                     [self.begin, time_range[0] + candle_size],
                     [time_range[1] - candle_size, self.end],
                 ]
-                use_cache = time_range[:]
+                use_cache = True # time_range[:]
 
             # covers the end of what we need but not the beginning
             elif time_range[0] > self.begin and time_range[1] >= self.end:
                 gather = [[self.begin, time_range[0] + candle_size]]
-                use_cache = [time_range[0], self.end]
+                use_cache = True # [time_range[0], self.end]
 
             # covers the beginning of what we need but not the end
             elif time_range[0] <= self.begin and time_range[1] < self.end:
                 gather = [[time_range[1] - candle_size, self.end]]
-                use_cache = [self.begin, time_range[1]]
+                use_cache = True # [self.begin, time_range[1]]
 
             # all of what we need and potentially more
             elif time_range[0] <= self.begin and time_range[1] >= self.end:
-                use_cache = [self.begin, self.end]
+                use_cache = True # [self.begin, self.end]
 
             else:
                 raise RuntimeError(
@@ -268,18 +276,25 @@ class Data:
 
             data = []
             if DETAIL:
-                print(f"gather: {gather}  use_cache: {use_cache}  @ {candle_size}, {index_key}")
+                print(
+                    f"gather: {gather}  use_cache: {use_cache}  @ {candle_size}, {index_key}"
+                )
             # gather up data from the two sources
             if gather is not None:
-                for batch in gather:
-                    batch = [max(i, min_time.get(index_key, 0)) for i in batch]
+                for raw_batch in gather:
+                    batch = [max(i, min_time.get(index_key, 0)) for i in raw_batch]
                     if batch[0] == batch[1]:
                         if DETAIL:
-                            print(f"Cannot fetch {batch}, cache says this exchange does not go this far back")
+                            print(
+                                f"Cannot fetch {raw_batch}, cache says this exchange does not go this far back"
+                            )
                         continue
                     data.append(self.gather_data(candle_size, *batch, asset, currency))
-                    if batch[0] + candle_size < (mindata:=min(data[-1]["unix"])):
-                        min_time[index_key] = float(max(min_time.get(index_key, 0), mindata))
+                    if np.any(data[-1]["unix"]):
+                        if batch[0] + candle_size < (mindata := min(data[-1]["unix"])):
+                            min_time[index_key] = float(
+                                max(min_time.get(index_key, 0), mindata)
+                            )
             if use_cache is not None:
                 data.append(
                     {
@@ -292,6 +307,7 @@ class Data:
 
             candles = dict()
             if len(data) > 1:
+                print(f"Merging {len(data)} candlesets into one...")
                 # merge the two data sources
                 # this will implicitly never happen if erase_cache is True, though
                 # an explicit check might be prudent
@@ -366,9 +382,16 @@ class Data:
               Bittrex, Poloniex, Bitfinex, Binance, Coinbase, and others.
             - For some exchanges (e.g., `bitshares`, `cryptocompare`, `alphavantage_*`),
               specific API functions are used to fetch the data.
-            - A `FIXME` comment indicates that the `nomics` API is no longer functional,
-              and thus this part of the code may not work.
         """
+        if int(min(end, time.time())) - int(begin) < candle_size:
+            return {
+                "unix": np.array([]),
+                "open": np.array([]),
+                "high": np.array([]),
+                "low": np.array([]),
+                "close": np.array([]),
+                "volume": np.array([]),
+            }
         try:
             if DETAIL:
                 print(
@@ -393,7 +416,9 @@ class Data:
                         begin,
                         end,
                         candle_size,
-                        self.api_key if self.exchange.startswith("alphavantage") else self.pool,
+                        self.api_key
+                        if self.exchange.startswith("alphavantage")
+                        else self.pool,
                     )
             elif self.exchange in ccxt.exchanges:
                 if DETAIL:
@@ -442,4 +467,8 @@ class Data:
                 )
             # reverse pair and try again
             asset, currency = currency, asset
-            return invert(self.gather_data(begin, end, asset, currency, inverted=True))
+            return invert(
+                self.gather_data(
+                    candle_size, begin, end, asset, currency, inverted=True
+                )
+            )

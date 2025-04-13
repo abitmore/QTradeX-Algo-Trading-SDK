@@ -7,6 +7,7 @@ cython_extensions = [
         name="qtradex.indicators.utilities",
         sources=["qtradex/indicators/utilities.pyx"],
     ),
+    Extension(name="qtradex.indicators.qi", sources=["qtradex/indicators/qi.pyx"]),
 ]
 
 setup(

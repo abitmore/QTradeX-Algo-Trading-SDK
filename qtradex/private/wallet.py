@@ -1,7 +1,6 @@
 from copy import deepcopy
 
 import ccxt
-from qtradex.private.bitshares_exchange import BitsharesExchange
 
 
 class WalletBase:

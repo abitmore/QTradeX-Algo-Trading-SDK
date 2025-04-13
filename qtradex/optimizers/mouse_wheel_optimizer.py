@@ -8,6 +8,7 @@ import qtradex as qx
 import ttkbootstrap as ttk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from qtradex.common.utilities import sigfig
+from qtradex.core.base_bot import Info
 from qtradex.core.tune_manager import save_tune
 from ttkbootstrap.constants import *
 
@@ -19,6 +20,7 @@ class MouseWheelTuner:
         self.wallet = wallet
 
     def optimize(self, bot):
+        bot.info = Info({"mode": "optimize"})
         self.bot = bot
         # Initialize ttkbootstrap with the 'darkly' theme
         self.root = ttk.Window(themename="darkly")

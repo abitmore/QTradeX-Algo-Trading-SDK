@@ -27,6 +27,7 @@ import numpy as np
 # QTRADEX MODULES
 from qtradex.common.utilities import NonceSafe, it, print_table, sigfig
 from qtradex.core import backtest
+from qtradex.core.base_bot import Info
 from qtradex.optimizers.utilities import (bound_neurons, end_optimization,
                                           plot_scores, print_tune)
 from qtradex.private.wallet import PaperWallet
@@ -90,6 +91,7 @@ def printouts(kwargs):
     msg += f"\nexpansions - {kwargs['expansions']}"
     msg += f"\nepoch {kwargs['epoch']} - Optimized '{kwargs['parameter']}' by {kwargs['coordinate']}"
     msg += f"\n\n{((kwargs['idx'] or 1)/(time.time()-kwargs['ipse_start'])):.2f} Backtests / Second"
+    msg += f"\nRunning on {kwargs['self'].data.days} days of data."
     msg += "\n\nCtrl+C to quit and save tune."
     print(msg)
 
@@ -108,6 +110,7 @@ def retest_process(bot, data, wallet, todo, done):
             bot.tune = work["tune"]
             # backtest and put in the done dictionary
             done[work["id"]] = backtest(bot, data, wallet.copy(), plot=False)
+            # print(bot.tune, done[work["id"]])
     except KeyboardInterrupt:
         print("Compute process ending...")
 
@@ -139,9 +142,11 @@ class IPSE:
         return [i[1] for i in sorted(new_scores, key=lambda x:x[0])]
 
     def optimize(self, bot):
+        bot.info = Info({"mode": "optimize"})
         bot.reset()
         bot = bound_neurons(bot)
-        coords = backtest(deepcopy(bot), self.data, self.wallet.copy(), plot=False)
+        
+        coords = backtest(deepcopy(bot), self.data, deepcopy(self.wallet), plot=False)
         print("Initial Backtest:")
         print(json.dumps(coords, indent=4))
 
@@ -196,7 +201,7 @@ class IPSE:
                                     improved.append([check_coord, parameter])
                                     # assign this best value to the bot's tune
                                     best_bots[check_coord][1].tune[parameter] = best
-                                    best_bots[check_coord][0] = score
+                                    best_bots[check_coord][0] = score.copy()
 
                             # show optimization statistics
                             if self.options.show_terminal:
