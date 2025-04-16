@@ -1,4 +1,6 @@
+import os
 import shutil
+import sys
 import time
 from random import choice, sample
 
@@ -15,10 +17,10 @@ def logo(animate=False):
            ____                                    __     __
           / __ \    ____  ____   __   ____  ____  (_ \   / _)
          / /  \ \  (_  _)(  _ \ / _\ (    \(  __)   \ \_/ /
-        | |    | |   ||   )   //    \ ) D ( ) _)     \   /
+        | |    | |   ||   )   //    \ ) D | ) _)     \   /
         | |  /\| |  (__) (__\_)\_/\_/(____/(____)    / _ \
          \ \_\ \/                                  _/ / \ \_
-          \___\ \_                                (__/   \__)
+          \___\ \_ {}(__/   \__)
                \__)
         """
         return download_text.__doc__.replace("\n   ", "\n").strip("\n")
@@ -38,7 +40,13 @@ def logo(animate=False):
             + "\n"
         )
 
-    ev_logo = download_text()
+    ev_logo = download_text().format(
+        os.path.split(sys.argv[0])[1]
+        .rsplit(".py", 1)[0]
+        .replace("_", " ")
+        .title()
+        .center(31)
+    )
     cols = shutil.get_terminal_size().columns
     patterns = [
         (r"              *.   ~          %             `     ,        ", 27, 5),

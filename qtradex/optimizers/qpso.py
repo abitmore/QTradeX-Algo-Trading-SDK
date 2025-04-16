@@ -16,23 +16,26 @@ r"""
 
 github.com/litepresence & github.com/SquidKid-deluxe present:
 
-Elitist 
-Spiral Bred 
-Stochastic Dual Coordinate 
-Eroding Ascent
-Pruned Neuroplastic 
-Quantum Particle Swarm Optimization
-with Cyclic Simulated Annealing*
+Quantum Particle Swarm Optimization (QPSO) Script for Trading Strategy Optimization.
 
-*really just a few if statements with a fancy picture frame
+This module performs parameter tuning for algorithmic trading strategies using a
+sophisticated optimization technique. It implements a variant of Quantum Particle
+Swarm Optimization enhanced with:
+
+- N-Dimensional Coordinate Gradient Ascent
+- Cyclic Simulated Annealing
+- Neuroplastic Synaptic Learning
+- Fitness Inversion
+- Eroding Score Dynamics
+
+Features:
+- Live performance tracking and plotting.
+- Customizable tuning via QPSOoptions.
+- Modular design for use in backtesting frameworks.
+
+Note: Press Ctrl+C during runtime to terminate optimization gracefully
+      and print the best tuning dictionary.
 """
-
-# FIXME
-# plotting for qpso yellow dots/green max
-# plotting for qpso cyclic annealing
-# plotting for qpos backtest
-
-
 # STANDARD MODULES
 import getopt
 import itertools
@@ -77,7 +80,7 @@ class QPSOoptions:
         self.cyclic_freq = 1000
         self.digress = 0.99
         self.digress_freq = 2500
-        self.temperature = 0.002
+        self.temperature = 0.0002
         self.epochs = math.inf
         self.improvements = 100000
         self.cooldown = 0
@@ -124,13 +127,17 @@ def printouts(kwargs):
                 [
                     [0, 0]
                     + [
-                        int(i * 5)
+                        2 if i else 0
                         for i in kwargs["self"].options.fitness_ratios.values()
                     ]
                 ]
             ),
         )
     )
+
+    for coord in kwargs["boom"]:
+        cdx = kwargs["coords"].index(coord)
+        colors[len(kwargs["parameters"])+2+cdx, cdx+2] = 3
 
     msg = "\033c"
     msg += it(
@@ -140,10 +147,10 @@ def printouts(kwargs):
         "Optimization, Enhanced by Cyclic Simulated Annealing",
     )
     msg += "\n\n"
-    msg += f"\n{print_table(table, render=True, colors=colors, pallete=[34, 34, 34, 34, 32, 33])}\n"
+    msg += f"\n{print_table(table, render=True, colors=colors, pallete=[0, 34, 33, 178])}\n"
     msg += f"\n{kwargs['boom']}"
     msg += (
-        f"\ntest {kwargs['iteration']} improvements {kwargs['improvements']} tweaks {kwargs['tweaks']} synapses"
+        f"\ntest {kwargs['iteration']} improvements {kwargs['improvements']} synapses"
         f" {len(kwargs['synapses'])}"
     )
     msg += f"\npath {kwargs['path']:.4f} aegir {kwargs['aegir']:.4f}"
@@ -227,90 +234,68 @@ class QPSO:
         # Stumbling, yet remarkably determined
         return aegir, path
 
-    def optimize(self, bot):
+    def optimize(self, bot, **kwargs):
         """
         Perform Quantum Particle Swarm Optimization (QPSO) to optimize trading strategies.
 
-        The function backtests and compares the results to previous best in terms of fitness (ROI).
-        It intelligently chooses alternative parameters for the optimization process using various
-        techniques such as N-Dimensional Brownian Drunk Walk, Dual Coordinate Gradient Ascent,
-        Cyclic Simulated Annealing, Neuroplastic Synapse Connectivity, and Periodic Peak Fitness Digression.
+        This method iteratively adjusts the bot's parameters using probabilistic and evolutionary
+        techniques to discover improved configurations. It maintains historical performance,
+        periodically alters exploration dynamics, and adapts based on recent successes (synapses).
 
         Parameters:
-        storage (dict): The storage containing historical data and results.
-        info (dict): Additional information required for the optimization process.
-        data (list): The data used for backtesting.
-        portfolio (dict): The portfolio details.
-        mode (dict): The mode of the optimization process.
-        tune (dict): The parameters for tuning the optimization.
-        control (dict): The control parameters for the optimization.
+        bot (Bot): The trading bot instance with strategy parameters to optimize.
 
         Returns:
-        None
+        dict: Dictionary of the best bots found per evaluation coordinate.
         """
         bot.info = Info({"mode": "optimize"})
         improvements = 0
-        # NOTE: iteration is not monotonic, if the bot improves, "repeat condition"
-        #       does iteration -= 1
-        iteration = 0
-        # idx is, though
-        idx = 0
-        synapses = []
-        tweaks = 0
-        dpt = 1
+        iteration = 0  # Tracks exploration loop; decremented on improvements to allow more trials
+        idx = 0  # Tracks total iterations, always incremented
+        synapses = []  # Stores tuples of past successful neuron groups (parameter names)
 
-        # reset the given bot
-        bot.reset()
-        bot = bound_neurons(bot)
+        bot.reset()  # Reset bot state before optimization
+        bot = bound_neurons(bot)  # Constrain parameters within valid range
 
-        # initialize best_bots and the coords list
-        initial_result = backtest(
-            deepcopy(bot), self.data, deepcopy(self.wallet), plot=False
-        )
+        # Initial evaluation and score setup
+        initial_result = backtest(deepcopy(bot), self.data, deepcopy(self.wallet), plot=False, **kwargs)
         print("Initial Backtest:")
         print(json.dumps(initial_result, indent=4))
 
-        coords = list(initial_result.keys())
-        parameters = list(bot.tune.keys())
+        coords = list(initial_result.keys())  # Evaluation metrics (e.g., ROI, Sharpe)
+        parameters = list(bot.tune.keys())  # Parameters to optimize
 
         best_bots = {coord: [initial_result.copy(), deepcopy(bot)] for coord in coords}
 
-        # initialize the fitness ratios
+        # Initialize fitness ratio weights for exploration
         if self.options.fitness_ratios is None:
             self.options.fitness_ratios = {coord: 0 for coord in coords}
-            self.options.fitness_ratios[coords[0]] = 1
+            self.options.fitness_ratios[coords[0]] = 1  # Default to first metric if not set
 
-        # keep track of the past best bots
-        historical = []
-        # and those that were "kinda good"
-        historical_tests = []
+        historical = []  # Stores improvement snapshots
+        historical_tests = []  # Stores near-optimal attempts
 
         if self.options.plot_period:
-            plt.ion()
+            plt.ion()  # Enable interactive plotting
 
-        # the whole function is wrapped in a try...except KeyboardInterrupt:
-        # so that the tune is saved when the user presses Ctrl+C
         try:
-            # note start time for speed tracking later
             qpso_start = time.time()
             while True:
-                # optional pause to keep cpu from pinning
                 if self.options.cooldown:
-                    time.sleep(self.options.cooldown)
-                # tick
+                    time.sleep(self.options.cooldown)  # Optional delay to reduce CPU load
+
                 iteration += 1
                 idx += 1
+
+                # Plot score evolution periodically
                 if self.options.plot_period and not idx % self.options.plot_period:
                     plot_scores(historical, historical_tests, idx)
 
-                # Every `period`, use the user function to change coordinates
+                # Periodically invert fitness preferences (for diversity)
                 if not idx % self.options.fitness_period:
-                    self.options.fitness_ratios = self.options.fitness_inversion(
-                        self.options.fitness_ratios
-                    )
+                    self.options.fitness_ratios = self.options.fitness_inversion(self.options.fitness_ratios)
 
-                # Occasionally erode the best bot's scores
-                # to allow for alternate n-dimensional travel
+                # Allow exploration in suboptimal directions
                 if iteration % self.options.digress_freq == 0:
                     best_bots = {
                         coord: [
@@ -320,88 +305,74 @@ class QPSO:
                         for coord, (score, bot) in best_bots.items()
                     }
 
-                # Synaptogenesis considers a new neuron connection
-                if self.options.neurons:
-                    neurons = self.options.neurons
-                else:
-                    neurons = list(parameters)
-                    for _ in range(3):
-                        neurons = sample(population=neurons, k=randint(1, len(neurons)))
+                # Choose neurons to mutate
+                neurons = self.options.neurons if self.options.neurons else list(parameters)
+                for _ in range(3):
+                    neurons = sample(population=neurons, k=randint(1, len(neurons)))
                 neurons.sort()
 
-                # Neuroplasticity considers past winning synapses
+                # If past synapses exist, reuse them occasionally (mimics synaptic memory)
                 synapse_msg = ""
                 if randint(0, 2):
                     if len(synapses) > 2:
                         synapse_msg = it("red", "synapse")
                         neurons = choice(synapses)
 
-                # Synaptic pruning limits brain size
-                synapses = (
-                    list(set(synapses))[-self.options.synapses :]
-                    if self.options.synapses
-                    else []
-                )
+                # Limit memory size of synapses (synaptic pruning)
+                synapses = list(set(synapses))[-self.options.synapses:] if self.options.synapses else []
 
+                # Select which coordinate to optimize
                 coord = choices(
                     population=list(self.options.fitness_ratios.keys()),
                     weights=list(self.options.fitness_ratios.values()),
                     k=1,
                 )[0]
-                bot = deepcopy(best_bots[coord][1])
+                bot = deepcopy(best_bots[coord][1])  # Start from best bot in selected coordinate
 
-                # Quantum particle drunkwalk alters neurons in the chosen synapse
+                # Mutate parameters using QPSO mechanisms
                 for neuron in neurons:
                     aegir, path = self.entheogen(
                         iteration, parameters.index(neuron) / len(parameters)
                     )
-                    # keep floats and integers
+                    # Mutate float parameters with noise and scaling
                     if isinstance(bot.tune[neuron], float):
                         bot.tune[neuron] *= path
                         bot.tune[neuron] += (random() - 0.5) / 1000
-
+                    # Mutate integer parameters with discrete steps
                     elif isinstance(bot.tune[neuron], int):
-                        bot.tune[neuron] = int(
-                            bot.tune[neuron] + randint(-2, 2)
-                        )  # + int(path * 5)
+                        bot.tune[neuron] = int(bot.tune[neuron] + randint(-2, 2))
 
-                # Bound neurons to reasonable values
-                bot = bound_neurons(bot)
+                bot = bound_neurons(bot)  # Ensure parameter validity
 
-                # Perform a new backtest
-                new_score = backtest(bot, self.data, self.wallet.copy(), plot=False)
+                # Evaluate new configuration
+                new_score = backtest(bot, self.data, self.wallet.copy(), plot=False, **kwargs)
 
-                boom = ""
+                boom = []
                 improved = False
-                for coord, (check_score, check_bot) in best_bots.copy().items():
+                for coord, (check_score, _) in best_bots.copy().items():
                     if new_score[coord] > check_score[coord]:
                         best_bots[coord] = (new_score, bot)
-                        boom += f"!!! BOOM {coord.upper()} !!!  "
+                        boom.append(coord)
                         improved = True
 
-                # Print relevant information and results
+                # Optional terminal printout
                 if self.options.show_terminal and not idx % 10:
                     printouts(locals())
 
-                # if the bot got better
+                # Record successful synapse and save snapshot
                 if improved:
-                    # note the synapses
                     synapses.append(tuple(neurons))
-                    # this is a "historical" moment, so keep the new best bots
                     historical.append((idx, deepcopy(best_bots)))
-                    # repeact condition
-                    iteration -= 1
+                    iteration -= 1  # Grant extra iterations for progress
 
-                # if this bot is decent in any regard, save its score for plotting
+                # Log near-optimal scores
                 for coord, (score, _) in best_bots.items():
                     if new_score[coord] >= score[coord] * self.options.top_percent:
                         historical_tests.append((idx, new_score.copy()))
                         break
 
-                # if we're done
+                # Exit if iteration or improvement limits are reached
                 if idx > self.options.epochs or iteration > self.options.improvements:
-                    # easiest way to not duplicate code;
-                    # the try..except handles tune export
                     raise KeyboardInterrupt
 
         except KeyboardInterrupt:

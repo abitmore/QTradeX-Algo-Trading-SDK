@@ -69,7 +69,7 @@ class LSGAoptions(QPSOoptions):
         self.cyclic_freq = 25
         self.erode = 0.9999
         self.erode_freq = 200
-        self.temperature = 0.5
+        self.temperature = 0.005
         self.epochs = math.inf
         self.improvements = 10000
         self.cooldown = 0
@@ -86,7 +86,7 @@ def printouts(kwargs):
     Print live updates and statistics during a session.
     """
     table = []
-    table.append([""] + kwargs["coords"] + [""] + kwargs["parameters"] + [""])
+    table.append([""] + kwargs["parameters"] + [""] + kwargs["coords"] + [""])
     table.append(
         ["current test"]
         + list(kwargs["bot"].tune.values())
@@ -96,11 +96,7 @@ def printouts(kwargs):
     )
     for coord, (score, bot) in kwargs["best_bots"].items():
         table.append(
-            [coord]
-            + list(bot.tune.values())
-            + [""]
-            + list(score.values())
-            + ["###"]
+            [coord] + list(bot.tune.values()) + [""] + list(score.values()) + ["###"]
         )
 
     n_coords = len(kwargs["coords"])
@@ -109,9 +105,7 @@ def printouts(kwargs):
 
     colors = np.vstack(
         (
-            np.zeros(
-                (len(kwargs["parameters"]) + 2, n_coords + 2)
-            ),
+            np.zeros((len(kwargs["parameters"]) + 2, n_coords + 2)),
             np.hstack(
                 (
                     np.zeros((n_coords, 2)),
@@ -119,10 +113,19 @@ def printouts(kwargs):
                 )
             ),
             np.array(
-                [[0, 0] + [int(i * 5) for i in kwargs["self"].options.fitness_ratios.values()]]
+                [
+                    [0, 0]
+                    + [
+                        2 if i else 0
+                        for i in kwargs["self"].options.fitness_ratios.values()
+                    ]
+                ]
             ),
         )
     )
+    for coord in kwargs["boom"]:
+        cdx = kwargs["coords"].index(coord)
+        colors[len(kwargs["parameters"])+2+cdx, cdx+2] = 3
 
     msg = "\033c"
     msg += it(
@@ -132,10 +135,9 @@ def printouts(kwargs):
         "Optimization, Enhanced by Cyclic Simulated Annealing",
     )
     msg += "\n\n"
-    msg += f"\n{print_table(table, render=True, colors=colors, pallete=[34, 34, 34, 34, 32, 33])}\n"
-    msg += f"\n{kwargs['boom']}"
+    msg += f"\n{print_table(table, render=True, colors=colors, pallete=[0, 34, 33, 178])}\n"
     msg += (
-        f"\ntest {kwargs['iteration']} improvements {kwargs['improvements']} tweaks {kwargs['tweaks']} synapses"
+        f"\ntest {kwargs['iteration']} improvements {kwargs['improvements']} synapses"
         f" {len(kwargs['synapses'])}"
     )
     msg += f"\npath {kwargs['path']:.4f} aegir {kwargs['aegir']:.4f}"
@@ -146,7 +148,7 @@ def printouts(kwargs):
     print(msg)
 
 
-def retest_process(bot, data, wallet, todo, done):
+def retest_process(bot, data, wallet, todo, done, **kwargs):
     try:
         while True:
             try:
@@ -159,7 +161,7 @@ def retest_process(bot, data, wallet, todo, done):
             # assign the tune
             bot.tune = work["tune"]
             # backtest and put in the done dictionary
-            done[work["id"]] = backtest(bot, data, wallet.copy(), plot=False)
+            done[work["id"]] = backtest(bot, data, wallet.copy(), plot=False, **kwargs)
     except KeyboardInterrupt:
         print("Compute process ending...")
 
@@ -167,7 +169,7 @@ def retest_process(bot, data, wallet, todo, done):
 class LSGA(QPSO):
     def __init__(self, data, wallet=None, options=None):
         if wallet is None:
-            wallet = PaperWallet({data.asset:0, data.currency:1})
+            wallet = PaperWallet({data.asset: 0, data.currency: 1})
         self.options = options if options is not None else LSGAoptions()
         self.data = data
         self.wallet = wallet
@@ -193,7 +195,7 @@ class LSGA(QPSO):
 
         return new_scores
 
-    def optimize(self, bot):
+    def optimize(self, bot, **kwargs):
         """
         Perform Quantum Particle Swarm Optimization (QPSO) to optimize trading strategies.
 
@@ -203,36 +205,25 @@ class LSGA(QPSO):
         Cyclic Simulated Annealing, Neuroplastic Synapse Connectivity, and Periodic Peak Fitness Digression.
 
         Parameters:
-        storage (dict): The storage containing historical data and results.
-        info (dict): Additional information required for the optimization process.
-        data (list): The data used for backtesting.
-        portfolio (dict): The portfolio details.
-        mode (dict): The mode of the optimization process.
-        tune (dict): The parameters for tuning the optimization.
-        control (dict): The control parameters for the optimization.
+        bot (object): The trading bot to optimize.
 
         Returns:
-        None
+        dict: The best bots and their associated performance metrics.
         """
         bot.info = Info({"mode": "optimize"})
         improvements = 0
-        # NOTE: iteration is not monotonic, if the bot improves, "repeat condition"
-        #       does iteration -= 1
-        iteration = 0
-        # idx is, though
-        idx = 0
+        iteration = 0  # Tracks iterations during optimization
+        idx = 0  # Index for fitness evaluation
         n_backtests = 1
-        synapses = []
-        tweaks = 0
-        dpt = 1
+        synapses = []  # Tracks past neuron connections
 
-        # reset the given bot
+        # Reset the given bot and apply neuron boundaries
         bot.reset()
-        bot = bound_neurons(bot)
+        # bot = bound_neurons(bot)
 
-        # initialize best_bots and the coords list
+        # Initialize best_bots with initial backtest result
         initial_result = backtest(
-            deepcopy(bot), self.data, deepcopy(self.wallet), plot=False
+            deepcopy(bot), self.data, deepcopy(self.wallet), plot=False, **kwargs
         )
         print("Initial Backtest:")
         print(json.dumps(initial_result, indent=4))
@@ -242,12 +233,12 @@ class LSGA(QPSO):
 
         best_bots = {coord: [initial_result.copy(), deepcopy(bot)] for coord in coords}
 
-        # initialize the fitness ratios
+        # Initialize fitness ratios for all coordinates
         if self.options.fitness_ratios is None:
             self.options.fitness_ratios = {coord: 0 for coord in coords}
             self.options.fitness_ratios[coords[0]] = 1
 
-        # multiprocessing manager for shared ipc dictionary
+        # Using multiprocessing to handle bot testing across processes
         with Manager() as manager:
             todo = manager.list()
             done = manager.dict()
@@ -255,31 +246,30 @@ class LSGA(QPSO):
                 Process(
                     target=retest_process,
                     args=(bot, self.data, self.wallet, todo, done),
+                    kwargs=kwargs
                 )
                 for _ in range(self.options.processes)
             ]
             for child in children:
                 child.start()
-            # the whole function is wrapped in a try...except KeyboardInterrupt:
-            # so that the tune is printed when the user presses Ctrl+C
+
             try:
-                # note start time for speed tracking later
+                # Track start time for performance metrics
                 lsga_start = time.time()
+
                 while True:
-                    # optional pause to keep cpu from pinning
+                    # Optional pause to prevent CPU overload
                     time.sleep(self.options.cooldown)
-                    # tick
                     iteration += 1
                     idx += 1
 
-                    # Every `period`, use the user function to change coordinates
+                    # Periodically adjust fitness ratios using user-defined function
                     if not idx % self.options.fitness_period:
                         self.options.fitness_ratios = self.options.fitness_inversion(
                             self.options.fitness_ratios
                         )
 
-                    # Occasionally erode the best bot's scores
-                    # to allow for alternate n-dimensional travel
+                    # Occasionally erode the best bot's scores to encourage alternative solutions
                     if idx % self.options.erode_freq == 0:
                         best_bots = {
                             coord: [
@@ -289,28 +279,22 @@ class LSGA(QPSO):
                             for coord, (score, bot) in best_bots.items()
                         }
 
-                    # Synaptogenesis considers a new neuron connection
-                    if self.options.neurons:
-                        # Allow an override
-                        neurons = self.options.neurons
-                    else:
-                        neurons = list(bot.tune.keys())
-                        for _ in range(3):
-                            neurons = sample(
-                                population=neurons, k=randint(1, len(neurons))
-                            )
+                    # Synaptogenesis: Considering new neuron connections
+                    neurons = self.options.neurons or list(bot.tune.keys())
+                    for _ in range(3):
+                        neurons = sample(population=neurons, k=randint(1, len(neurons)))
                     neurons.sort()
 
-                    # Neuroplasticity considers past winning synapses
+                    # Neuroplasticity: Select past winning synapses for adjustment
                     synapse_msg = ""
-                    if randint(0, 2):
-                        if len(synapses) > 2:
-                            synapse_msg = it("red", "synapse")
-                            neurons = choice(synapses)
+                    if randint(0, 2) and len(synapses) > 2:
+                        synapse_msg = it("red", "synapse")
+                        neurons = choice(synapses)
 
-                    # Synaptic pruning limits brain size
+                    # Limit synapse count through pruning
                     synapses = list(set(synapses))[-self.options.synapses :]
 
+                    # Select a random coordinate based on fitness ratio
                     coord = choices(
                         population=list(self.options.fitness_ratios.keys()),
                         weights=list(self.options.fitness_ratios.values()),
@@ -318,46 +302,40 @@ class LSGA(QPSO):
                     )[0]
                     bot = best_bots[coord][1]
 
-                    # create a population
+                    # Create population of bots for evaluation
                     bots = [deepcopy(bot) for _ in range(self.options.population)]
-
-                    for bot in bots:
-                        # Quantum particle drunkwalk alters neurons in the chosen synapse
+                    for botdx, bot in enumerate(bots):
+                        # Quantum particle drunkwalk: Alter neurons in selected synapse
                         for neuron in neurons:
                             aegir, path = self.entheogen(
-                                idx,
-                                list(bot.tune.keys()).index(neuron) / len(bot.tune),
+                                idx, list(bot.tune.keys()).index(neuron) / len(bot.tune)
                             )
-                            # keep floats and integers
                             if isinstance(bot.tune[neuron], float):
                                 bot.tune[neuron] *= path
-                                bot.tune[neuron] += (random()-0.5)/1000
+                                bot.tune[neuron] += (random() - 0.5) / 1000
                             elif isinstance(bot.tune[neuron], int):
-                                bot.tune[neuron] = bot.tune[neuron] + randint(
-                                    -2, 2
-                                )  # int(path * 5)
+                                bot.tune[neuron] += randint(-2, 2)
+
                         # Bound neurons to reasonable values
-                        bot = bound_neurons(bot)
+                        bound_neurons(bot)
 
                     new_scores = self.retest(todo, done, bots)
 
-                    # sort the bots, picking a random coordinate to use
+                    # Sort bots by fitness score for the selected coordinate
                     coordx = randint(0, len(self.options.fitness_ratios) - 1)
                     new_scores.sort(
                         key=lambda x: list(x[0].values())[coordx], reverse=True
                     )
 
-                    # pick some good performers
+                    # Select top performers
                     n_top = max(
                         int(self.options.population * self.options.top_ratio), 2
                     )
                     good_performers = sample(new_scores[:n_top], n_top)
 
+                    # Merge best performers to create offspring
                     merged = [
-                        merge(
-                            new_scores[0][1].tune,
-                            choice(good_performers)[1].tune,
-                        )
+                        merge(new_scores[0][1].tune, choice(good_performers)[1].tune)
                         for _ in range(self.options.offspring)
                     ]
                     bots = [deepcopy(bot) for _ in range(self.options.population)]
@@ -366,38 +344,35 @@ class LSGA(QPSO):
 
                     merged_scores = self.retest(todo, done, bots)
 
+                    # Merge new scores with previous ones
                     new_scores.extend(merged_scores)
-
                     n_backtests += len(new_scores)
 
-                    boom = ""
+                    boom = []
                     improved = False
-                    for (new_score, bot) in new_scores:
+                    for new_score, bot in new_scores:
                         for coord, (check_score, check_bot) in best_bots.copy().items():
                             if new_score[coord] > check_score[coord]:
                                 best_bots[coord] = (new_score, bot)
-                                boom += f"!!! BOOM {coord.upper()} !!!  "
+                                boom.append(coord)
                                 improved = True
 
-                    # Print relevant information and results
+                    # Print relevant information and results if enabled
                     if self.options.show_terminal:
                         printouts(locals())
 
-                    # if the bot got better
+                    # If the bot improved, note the change and adjust iteration
                     if improved:
-                        # note the synapses
                         synapses.append(tuple(neurons))
-                        # repeat condition
                         iteration -= 1
 
-                    # if we're done
+                    # Check if optimization should stop
                     if (
                         idx > self.options.epochs
                         or iteration > self.options.improvements
                     ):
-                        # easiest way to not duplicate code;
-                        # the try..except handles tune export
                         raise KeyboardInterrupt
+
             except KeyboardInterrupt:
                 end_optimization(best_bots, self.options.print_tune)
                 return best_bots

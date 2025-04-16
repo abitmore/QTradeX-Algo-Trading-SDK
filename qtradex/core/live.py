@@ -26,6 +26,7 @@ def live(
     tick_size=60 * 15,
     tick_pause=60 * 15,
     cancel_pause=3600 * 2,
+    **kwargs,
 ):
     """
     Simulate trading using a bot with live data updates, allowing for paper trading
@@ -49,6 +50,7 @@ def live(
     Returns:
     None
     """
+    kwargs.pop("fine_data", None)
     bot.info = Info({"mode": "live"})
     print("\033c")
 
@@ -57,9 +59,10 @@ def live(
 
     now = int(time.time())
     data.end = now
+    bot.info._set("start", now)
     # we only need `bot.autorange` worth of (daily) candles
     # doubled for better accuracy on the `last_trade`
-    window = (bot.autorange() * 86400) * 2
+    window = (bot.autorange() * 86400) * 6
     data.begin = data.end - window
 
     # allow for different candle sizes whilst maintaining the type of the parameter
@@ -87,7 +90,8 @@ def live(
         range_periods=False,
         fine_data=raw_15m,
         always_trade="smart",
-        show=False,
+        show=True,
+        **kwargs,
     )
 
     # update the plot
@@ -138,6 +142,7 @@ def live(
             fine_data=raw_15m,
             always_trade="smart",
             show=False,
+        **kwargs,
         )
         plt.pause(0.1)
 

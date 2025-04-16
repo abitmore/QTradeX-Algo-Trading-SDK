@@ -61,8 +61,8 @@ def print_tune(score, bot, render=False):
 
 def end_optimization(best_bots, show):
     msg = "\033c=== FINAL TUNES ===\n\n"
-    for n, (score, bot) in enumerate(best_bots):
-        name = f"BEST {list(score.keys())[n].upper()} TUNE"
+    for coord, (score, bot) in best_bots.items():
+        name = f"BEST {coord.upper()} TUNE"
         msg += "## " + name + "\n\n"
         msg += print_tune(score, bot, render=True)
         save_bot = deepcopy(bot)

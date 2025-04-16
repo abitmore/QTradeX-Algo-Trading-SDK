@@ -64,7 +64,7 @@ def print_trade(data, initial_balances, new_balances, operation, now, last_trade
     print("\n")
 
 
-def papertrade(bot, data, wallet=None, tick_size=60 * 15, tick_pause=60 * 5):
+def papertrade(bot, data, wallet=None, tick_size=60 * 15, tick_pause=60 * 5, **kwargs):
     """
     Simulate trading using a bot with live data updates, allowing for paper trading
     without executing real trades. This function continuously fetches new data,
@@ -80,15 +80,17 @@ def papertrade(bot, data, wallet=None, tick_size=60 * 15, tick_pause=60 * 5):
     Returns:
     None
     """
+    kwargs.pop("fine_data", None)
     bot.info = Info({"mode": "papertrade"})
     if wallet is None:
         wallet = PaperWallet({data.asset: 0, data.currency: 1})
     print("\033c")
     now = int(time.time())
     data.end = now
+    bot.info._set("start", now)
     # we only need `bot.autorange` worth of (daily) candles
     # doubled for better accuracy on the `last_trade`
-    window = (bot.autorange() * 86400) * 2
+    window = (bot.autorange() * 86400) * 6
     data.begin = data.end - window
 
     # allow for different candle sizes whilst maintaining the type of the parameter
@@ -114,7 +116,8 @@ def papertrade(bot, data, wallet=None, tick_size=60 * 15, tick_pause=60 * 5):
         range_periods=False,
         fine_data=raw_15m,
         always_trade="smart",
-        show=False,
+        show=True,
+        **kwargs,
     )
 
     # update the plot
@@ -154,6 +157,7 @@ def papertrade(bot, data, wallet=None, tick_size=60 * 15, tick_pause=60 * 5):
             fine_data=raw_15m,
             always_trade="smart",
             show=False,
+        **kwargs,
         )
         plt.pause(0.1)
 

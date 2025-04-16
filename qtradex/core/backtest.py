@@ -64,25 +64,29 @@ def determine_execution_price(operation, wallet, price, execution, asset, curren
     Returns:
     - Updated execution price and operation.
     """
+    low, high = sorted([price["open"], price["close"]])
+    low = (low + price["low"])/2
+    high = (high + price["high"])/2
+
     if isinstance(operation, Thresholds):
         if wallet[asset]:
-            if price["high"] > operation.selling:
+            if high > operation.selling:
                 execution = operation.selling
                 operation = Sell(maxvolume=operation.maxvolume)
                 operation.is_override = False
         elif wallet[currency]:
-            if price["low"] < operation.buying:
+            if low < operation.buying:
                 execution = operation.buying
                 operation = Buy(maxvolume=operation.maxvolume)
                 operation.is_override = False
     elif operation.price is not None:
         if wallet[asset] and isinstance(operation, Sell):
-            if price["high"] > operation.price:
+            if high > operation.price:
                 execution = operation.price
             else:
                 operation = None
         elif wallet[currency] and isinstance(operation, Buy):
-            if price["low"] < operation.price:
+            if low < operation.price:
                 execution = operation.price
             else:
                 operation = None
@@ -131,7 +135,7 @@ def backtest(
     range_periods=True,
     show=True,
     fine_data=None,
-    always_trade=False,
+    always_trade="smart",
 ):
     """
     Run a backtest for the trading bot using historical data.
@@ -291,29 +295,36 @@ def backtest(
         ),
         **custom,
     }
-    # print("Days:", data.days, "  Ticks:", ticks,  "Warmup:", warmup, f"({data.days - ticks})")
 
     # Plot results if requested
     if plot:
         if show:
             print(json.dumps(bot.tune, indent=4))
             for op in states["detailed_trades"]:
-                print(
-                    f'[{time.ctime(op["unix"])}]',
-                    " ",
-                    "BUY " if isinstance(op["object"], Buy) else "SELL",
-                    " ",
-                    it("green" if op["roi"] >= 1 else "red", sigfig(op["roi"], 6)),
-                )
+                if op["roi"] >= 1:
+                    print(
+                        f'[{time.ctime(op["unix"])}]',
+                        " ",
+                        "BUY " if isinstance(op["object"], Buy) else "SELL",
+                        " ",
+                        it("green", f'{sigfig((op["roi"]-1)*100, 6):.1f}'.ljust(4, "0")
+                        + "% GAIN")
+                    )
+                else:
+                    print(
+                        f'[{time.ctime(op["unix"])}]',
+                        " ",
+                        "BUY " if isinstance(op["object"], Buy) else "SELL",
+                        " ",
+                        it("red", f'{sigfig((1-op["roi"])*100, 6):.1f}'.ljust(4, "0")
+                        + "% LOSS")
+                    )
             print(json.dumps(ret, indent=4))
             print(
-                "Days:",
-                data.days,
-                "  Ticks:",
-                ticks,
-                "Days per Trade:",
-                ticks / (len(states["detailed_trades"]) + 1),
+                f"Days: {data.days:.2f}   Ticks: {ticks}   "
+                f"Days per trade: {(ticks*candle_size) / ((len(states['detailed_trades']) + 1))/86400:.2f}"
             )
+            print(it("yellow", f'{bot.info["mode"].upper()} TRADING AT {data.exchange.upper()}'))
         bot.plot(data, raw_states, indicator_states, block)
 
     # If requested, return the raw states along with the fitness metrics
