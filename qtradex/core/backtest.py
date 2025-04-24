@@ -209,13 +209,18 @@ def backtest(
     # Main backtesting loop
     while now <= end:
         tickdx = np.searchsorted(indicated_data["unix"], now, side="left")
+        # this "fast forward" is largely for weekends, though
+        # it works for other types of missing data
         try:
             tick_data = {k: v[tickdx] for k, v in indicated_data.items()}
+            if abs(tick_data["unix"] - now) > data.candle_size:
+                now += candle_size
+                continue
         except IndexError:
             now += candle_size
             continue  # Skip to the next time step if tick data is not available
 
-        fine_tick_data = get_fine_tick_data(data, fine_data, now, tick_data)
+        fine_tick_data = get_fine_tick_data(data, fine_data, now-candle_size)
 
         # Protect the wallet from accidental modifications
         wallet._protect()
@@ -264,6 +269,7 @@ def backtest(
     states = rotate(states)
     states["trades"] = [i for i in states["trades"] if i is not None]
     indicator_states = rotate(indicator_states)
+    states["indicator_states"] = indicator_states
 
     # Extract trade times and prices for analysis
     if states["trades"]:
@@ -299,32 +305,7 @@ def backtest(
     # Plot results if requested
     if plot:
         if show:
-            print(json.dumps(bot.tune, indent=4))
-            for op in states["detailed_trades"]:
-                if op["roi"] >= 1:
-                    print(
-                        f'[{time.ctime(op["unix"])}]',
-                        " ",
-                        "BUY " if isinstance(op["object"], Buy) else "SELL",
-                        " ",
-                        it("green", f'{sigfig((op["roi"]-1)*100, 6):.1f}'.ljust(4, "0")
-                        + "% GAIN")
-                    )
-                else:
-                    print(
-                        f'[{time.ctime(op["unix"])}]',
-                        " ",
-                        "BUY " if isinstance(op["object"], Buy) else "SELL",
-                        " ",
-                        it("red", f'{sigfig((1-op["roi"])*100, 6):.1f}'.ljust(4, "0")
-                        + "% LOSS")
-                    )
-            print(json.dumps(ret, indent=4))
-            print(
-                f"Days: {data.days:.2f}   Ticks: {ticks}   "
-                f"Days per trade: {(ticks*candle_size) / ((len(states['detailed_trades']) + 1))/86400:.2f}"
-            )
-            print(it("yellow", f'{bot.info["mode"].upper()} TRADING AT {data.exchange.upper()}'))
+            print_backtest_results(bot, states, data, ret, ticks, candle_size)
         bot.plot(data, raw_states, indicator_states, block)
 
     # If requested, return the raw states along with the fitness metrics
@@ -332,6 +313,35 @@ def backtest(
         ret = [ret, raw_states, states]
 
     return ret
+
+
+def print_backtest_results(bot, states, data, ret, ticks, candle_size):
+    print(json.dumps(bot.tune, indent=4))
+    for op in states["detailed_trades"]:
+        if op["roi"] >= 1:
+            print(
+                f'[{time.ctime(op["unix"])}]',
+                " ",
+                "BUY " if isinstance(op["object"], Buy) else "SELL",
+                " ",
+                it("green", f'{sigfig((op["roi"]-1)*100, 6):.1f}'.ljust(4, "0")
+                + "% GAIN")
+            )
+        else:
+            print(
+                f'[{time.ctime(op["unix"])}]',
+                " ",
+                "BUY " if isinstance(op["object"], Buy) else "SELL",
+                " ",
+                it("red", f'{sigfig((1-op["roi"])*100, 6):.1f}'.ljust(4, "0")
+                + "% LOSS")
+            )
+    print(json.dumps(ret, indent=4))
+    print(
+        f"Days: {data.days:.2f}   Ticks: {ticks}   "
+        f"Days per trade: {(ticks*candle_size) / ((len(states['detailed_trades']) + 1))/86400:.2f}"
+    )
+    print(it("yellow", f'{bot.info["mode"].upper()} TRADING AT {data.exchange.upper()}'))
 
 
 def adjust_tuning_parameters(bot, candle_size):
@@ -350,19 +360,18 @@ def adjust_tuning_parameters(bot, candle_size):
                 bot.tune[k] = int(v * (86400 / candle_size))
 
 
-def get_fine_tick_data(data, fine_data, now, tick_data):
+def get_fine_tick_data(data, fine_data, now):
     """
     Retrieve fine-grained tick data if available, otherwise return the regular tick data.
 
     Parameters:
     - fine_data: Optional fine-grained data for more precise trading.
     - now: The current time in UNIX format.
-    - tick_data: The regular tick data.
 
     Returns:
     - The fine tick data if available, otherwise the regular tick data.
     """
-    if fine_data is not None:
-        fine_tickdx = np.searchsorted(fine_data["unix"], now, side="left")
-        return {k: v[fine_tickdx] for k, v in fine_data.items()}
-    return {**tick_data, "candle_size": data.candle_size}
+    if fine_data is None:
+        fine_data = data
+    fine_tickdx = np.searchsorted(fine_data["unix"], now, side="left")
+    return {k: v[fine_tickdx] for k, v in fine_data.items()}

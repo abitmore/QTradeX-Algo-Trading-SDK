@@ -7,13 +7,12 @@ cython_extensions = [
         name="qtradex.indicators.utilities",
         sources=["qtradex/indicators/utilities.pyx"],
     ),
-    Extension(name="qtradex.indicators.qi", sources=["qtradex/indicators/qi.pyx"]),
+    Extension(name="qtradex.indicators.qi", sources=["qtradex/indicators/qi.py"]),
 ]
 
 setup(
     name="QTradeX",
     version="1.0",
-    authors=["squidKid-deluxe", "litepresence"],
     description="",  # Add your description here
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",

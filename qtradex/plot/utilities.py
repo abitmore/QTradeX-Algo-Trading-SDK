@@ -114,8 +114,8 @@ def plot(
     axes[0].yaxis.set_label_position("right")
     axes[0].set_yscale("log")
     axes[0].text(
-        0.5,
-        0.5,
+        0.5, # center x
+        0.5, # center y
         r"""     ____                                    __     __  
     / __ \    ____  ____   __   ____  ____  (_ \   / _) 
    / /  \ \  (_  _)(  _ \ / _\ (    \(  __)   \ \_/ /   
@@ -134,13 +134,13 @@ def plot(
         fontdict={"fontsize": 20, "fontweight": "bold", "family": "monospace"},
     )
 
-    # Add a left-justified title using text
+    # Add a left side title of "MODE / PAIR / EXCHANGE"
     axes[0].text(
-        -0.02,
-        0.5,
-        f'{info["mode"].upper()} ON {data.exchange.upper()}  {data.asset}/{data.currency}',
+        -0.02, # out of bounds left x
+        0.5, # center y
+        f'{info["mode"].upper()}:  {data.asset}/{data.currency} AT {data.exchange.upper()}',
         transform=axes[0].transAxes,
-        fontsize=15,
+        fontsize=13,
         verticalalignment="center",
         horizontalalignment="center",
         rotation=90,
@@ -218,18 +218,77 @@ def plot(
 
         axes[0].axvline(unix_to_stamp(info["start"]), color='yellow', alpha=0.5, linestyle='--')
 
+    # Plot Live Fill Orders
     if "live_trades" in info:
         print(info["live_trades"])
-        live_trades = [
-            (unix_to_stamp(i["timestamp"] / 1000), i["price"], i["side"])
-            for i in info["live_trades"]
-        ]
-        buys = [(i[0], i[1]) for i in live_trades if i[2] == "buy"]
-        sells = [(i[0], i[1]) for i in live_trades if i[2] == "sell"]
-        if buys:
-            axes[0].scatter(*zip(*buys), c="yellow", marker="^", s=120)
-        if sells:
-            axes[0].scatter(*zip(*sells), c="yellow", marker="v", s=120)
+
+
+        # FIXME need to add keys [timestamp, price, side] to bitshares info["live_trades"] for fill order plotting
+        # This should happen when creating info["live_trades"], not here
+
+
+        # [{'id': 'TWGV6U-WBJJE-PXU4NS', 'order': 'OGSITQ-AYAZ4-XTNMVE', 'info': {'ordertxid': 'OGSITQ-AYAZ4-XTNMVE', 'postxid': 'TKH2SE-M7IF5-CFI7LT', 
+        # 'pair': 'XXBTZUSD', 'aclass': 'forex', 'time': '1744219378.616529', 'type': 'sell', 'ordertype': 'limit', 
+        # 'price': '79953.00000', 'cost': '158.03510', 'fee': '0.31607', 'vol': '0.00197660', 'margin': '0.00000', 
+        # 'leverage': '0', 'misc': '', 'trade_id': '81933107', 'maker': True, 'id': 'TWGV6U-WBJJE-PXU4NS'}, 
+        # 'timestamp': 1744219378616, 'datetime': '2025-04-09T17:22:58.616Z', 'symbol': 'BTC/USD', 
+        # 'type': 'limit', 'side': 'sell', 'takerOrMaker': 'maker', 
+        # 'price': 79953.0, 'amount': 0.0019766, 'cost': 158.0351, 'fee': {'currency': 'USD', 'cost': 0.31607}, 
+        # 'fees': [{'currency': 'USD', 'cost': 0.31607}]}, {'id': 'TM7GAS-WTVVQ-2Z62Y4', 'order': 'O5NRLR-IF2LQ-B6FLXS', 
+        # 'info': {'ordertxid': 'O5NRLR-IF2LQ-B6FLXS', 'postxid': 'TKH2SE-M7IF5-CFI7LT', 'pair': 'XXBTZUSD', 'aclass': 'forex', 
+        # 'time': '1744300278.272592', 'type': 'buy', 'ordertype': 'limit', 'price': '78617.80000', 'cost': '157.69945', 
+        # 'fee': '0.31540', 'vol': '0.00200590', 'margin': '0.00000', 'leverage': '0', 'misc': '', 
+        # 'trade_id': '81991541', 'maker': True, 'id': 'TM7GAS-WTVVQ-2Z62Y4'}, 'timestamp': 1744300278272, 
+        # 'datetime': '2025-04-10T15:51:18.272Z', 'symbol': 'BTC/USD', 'type': 'limit', 'side': 'buy', 
+        # 'takerOrMaker': 'maker', 'price': 78617.8, 'amount': 0.0020059, 'cost': 157.69945, 
+        # 'fee': {'currency': 'USD', 'cost': 0.3154}, 'fees': [{'currency': 'USD', 'cost': 0.3154}]}, ...]
+
+
+
+        # {'id': '5.0.198843620', 'key': {'base': '1.3.4157', 'quote': '1.3.5589', 'sequence': -691087}, 
+        # 'time': '2025-04-20T20:42:30', 'op': {'fee': {'amount': 1124, 'asset_id': '1.3.5589'}, 
+        # 'order_id': '1.7.563521855', 'account_id': '1.2.1819428', 
+        # 'pays': {'amount': 1655, 'asset_id': '1.3.4157'}, 'receives': {'amount': 1405542, 'asset_id': '1.3.5589'}, 
+        # 'fill_price': {'base': {'amount': 1672, 'asset_id': '1.3.4157'}, 'quote': {'amount': 1419979, 'asset_id': '1.3.5589'}}, 'is_maker': True}}
+
+        # {'id': '5.0.198843620', 'key': {'base': '1.3.4157', 'quote': '1.3.5589', 'sequence': -691087}, 
+        # 'time': '2025-04-20T20:42:30', 'op': {'fee': {'amount': 1124, 'asset_id': '1.3.5589'}, 
+        # 'order_id': '1.7.563521855', 'account_id': '1.2.1819428', 
+        # 'pays': {'amount': 1655, 'asset_id': '1.3.4157'}, 'receives': {'amount': 1405542, 'asset_id': '1.3.5589'}, 
+        # 'fill_price': {'base': {'amount': 1672, 'asset_id': '1.3.4157'}, 'quote': {'amount': 1419979, 'asset_id': '1.3.5589'}}, 'is_maker': True}}
+
+        if isinstance(info["live_trades"], list) and info["live_trades"]:
+            if "timestamp" in info["live_trades"][0]:  # FIXME this check needs to be removed when bitshares is fixed
+
+                live_trades = [
+                    (unix_to_stamp(i["timestamp"] / 1000), i["price"], i["side"])
+                    for i in info["live_trades"]
+                ]
+                # Traceback (most recent call last):
+                #   File "/home/squid/Documents/QTRADEX/QTRADEX/EV_MAX/extinction_event_MAX3.py", line 542, in <module>
+                #     main()
+                #   File "/home/squid/Documents/QTRADEX/QTRADEX/EV_MAX/extinction_event_MAX3.py", line 534, in main
+                #     qx.dispatch(bot, data, wallet)
+                #   File "/home/squid/Documents/QTRADEX/QTRADEX/qtradex/qtradex/core/dispatch.py", line 113, in dispatch
+                #     qx.core.live(bot, data, api_key, api_secret, dust, **kwargs)
+                #   File "/home/squid/Documents/QTRADEX/QTRADEX/qtradex/qtradex/core/live.py", line 136, in live
+                #     backtest(
+                #   File "/home/squid/Documents/QTRADEX/QTRADEX/qtradex/qtradex/core/backtest.py", line 328, in backtest
+                #     bot.plot(data, raw_states, indicator_states, block)
+                #   File "/home/squid/Documents/QTRADEX/QTRADEX/EV_MAX/extinction_event_MAX3.py", line 412, in plot
+                #     axes = qx.plot(
+                #   File "/home/squid/Documents/QTRADEX/QTRADEX/qtradex/qtradex/plot/utilities.py", line 223, in plot
+                #     live_trades = [
+                #   File "/home/squid/Documents/QTRADEX/QTRADEX/qtradex/qtradex/plot/utilities.py", line 224, in <listcomp>
+                #     (unix_to_stamp(i["timestamp"] / 1000), i["price"], i["side"])
+                # TypeError: string indices must be integers
+
+                buys = [(i[0], i[1]) for i in live_trades if i[2] == "buy"]
+                sells = [(i[0], i[1]) for i in live_trades if i[2] == "sell"]
+                if buys:
+                    axes[0].scatter(*zip(*buys), c="yellow", marker="^", s=120)
+                if sells:
+                    axes[0].scatter(*zip(*sells), c="yellow", marker="v", s=120)
 
     # plot indicators
     plot_indicators(axes, timestamps, states, indicators, indicator_fmt)
@@ -264,6 +323,8 @@ def plot(
 
         left = min_timestamp - pad
         right = max_timestamp + pad
+        if int(left) == int(right):
+            raise ValueError(f"Min and Max timestamps on axis {i+1} are identical, not plotting.")
         ax.set_xlim(
             unix_to_stamp(left),
             unix_to_stamp(right),
@@ -388,9 +449,9 @@ def plot_balances(axis, timestamps, states, data):
         )
         # Fill the area above/below the initial balance in green/red
         ax.fill_between(timestamps, balance, start_y, where=(balance > start_y), 
-                        color='lime', alpha=0.15)
+                        color='lime', alpha=0.15, step="post")
         ax.fill_between(timestamps, balance, start_y, where=(balance < start_y), 
-                        color='tomato', alpha=0.3)
+                        color='tomato', alpha=0.3, step="post")
         # Plot a dashed horizontal initial balance line
         ax.axhline(balance[0], color=color,alpha=0.25, linestyle='--')
         # Plot yellow dots at max drawdown / max gain and start/stop

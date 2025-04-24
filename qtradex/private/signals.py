@@ -1,7 +1,11 @@
 import math
 
 
-class Buy:
+class SignalBase:
+    def __repr__(self):
+        return f"{type(self)}(profit={self.profit}, price={self.price}, unix={self.unix})"
+
+class Buy(SignalBase):
     def __init__(self, price=None, maxvolume=math.inf):
         self.maxvolume = maxvolume
         self.price = price
@@ -10,7 +14,7 @@ class Buy:
         self.is_override = True
 
 
-class Sell:
+class Sell(SignalBase):
     def __init__(self, price=None, maxvolume=math.inf):
         self.maxvolume = maxvolume
         self.price = price
@@ -19,7 +23,7 @@ class Sell:
         self.is_override = True
 
 
-class Thresholds:
+class Thresholds(SignalBase):
     def __init__(self, buying, selling, maxvolume=math.inf):
         self.maxvolume = maxvolume
         self.price = None

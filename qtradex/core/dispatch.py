@@ -44,13 +44,15 @@ def plot_gravitas(bot, data, wallet, **kwargs):
     min_g = get_float_input("Min Gravitas", 0.3)
     max_g = get_float_input("Max Gravitas", 1.7)
     tests = int(get_float_input("Number of tests", 200.0))
-    qx.backtest(bot, data, wallet.copy(), **kwargs)
+    qx.backtest(bot, data, wallet.copy(), **kwargs, block=False)
+    plt.figure("Gravitas")
     rois = []
     for g in np.linspace(min_g, max_g, tests):
         bot.gravitas = g
         rois.append(qx.backtest(bot, data, wallet.copy(), plot=False, **kwargs)["roi"])
 
     plt.plot(np.linspace(min_g, max_g, tests), rois)
+    plt.ioff()
     plt.show()
 
 
@@ -65,6 +67,7 @@ def dispatch(bot, data, wallet=None, **kwargs):
         "Optimize",    
         "Papertrade",
         "Live",
+        "Show Fill Orders"
     ]
     choice = select(options)
 
@@ -94,7 +97,7 @@ def dispatch(bot, data, wallet=None, **kwargs):
             optimizer.optimize(bot, **kwargs)
     elif choice == 2:
         qx.core.papertrade(bot, data, wallet, **kwargs)
-    elif choice == 3:
+    elif choice in [3, 4]:
         if data.exchange == "bitshares":
             api_key = input("Enter username: ")
             api_secret = getpass("Enter WIF:      ")
@@ -102,12 +105,17 @@ def dispatch(bot, data, wallet=None, **kwargs):
             api_key = getpass("Enter API key:    ")
             api_secret = getpass("Enter API secret: ")
 
-        dust = input("Don't trade under this amount of assets (enter for 1e-8): ")
-        if dust == "":
-            dust = 1e-8
-        else:
-            dust = float(dust)
+        if choice == 3:
+            dust = input("Don't trade under this amount of assets (enter for 1e-8): ")
+            if dust == "":
+                dust = 1e-8
+            else:
+                dust = float(dust)
 
         # TODO:
         # some kind of login menu, currently an error is thrown if the key isn't valid
-        qx.core.live(bot, data, api_key, api_secret, dust, **kwargs)
+
+        if choice == 3:
+            qx.core.live(bot, data, api_key, api_secret, dust, **kwargs)
+        elif choice == 4:
+            qx.core.filltest(bot, data, api_key, api_secret)

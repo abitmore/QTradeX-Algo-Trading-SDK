@@ -172,14 +172,14 @@ def merge_candles(candles, candle_size):
     # Initialize the merged dictionary
     merged_candles = {
         "unix": unique_unix,
-        "high": np.zeros_like(unique_unix, dtype=float),
-        "low": np.zeros_like(unique_unix, dtype=float),
-        "open": np.zeros_like(unique_unix, dtype=float),
-        "close": np.zeros_like(unique_unix, dtype=float),
-        "volume": np.zeros_like(unique_unix, dtype=float),
+        "high": [],
+        "low": [],
+        "open": [],
+        "close": [],
+        "volume": [],
     }
     if any("candle_size" in i for i in candles):
-        merged_candles["candle_size"] = np.zeros_like(unique_unix, dtype=float)
+        merged_candles["candle_size"] = []
 
     # Merge and handle conflicts by prioritizing candles1
     for i, unix in enumerate(unique_unix):
@@ -206,22 +206,17 @@ def merge_candles(candles, candle_size):
 
         # Set the values for the merged dictionary
         if close_val is not None:
-            merged_candles["high"][i] = np.max(high_vals)
-            merged_candles["low"][i] = np.min(low_vals)
-            merged_candles["open"][i] = open_val
-            merged_candles["close"][i] = close_val
-            merged_candles["volume"][i] = np.max(vol_vals)
-        else:
-            close_val = merged_candles["close"][-1]
-            merged_candles["high"][i] = close_val
-            merged_candles["low"][i] = close_val
-            merged_candles["open"][i] = close_val
-            merged_candles["close"][i] = close_val
-            merged_candles["volume"][i] = 0
-        if candle_sizes:
-            merged_candles["candle_size"][i] = max(candle_sizes)
+            merged_candles["high"].append(np.max(high_vals))
+            merged_candles["low"].append(np.min(low_vals))
+            merged_candles["open"].append(open_val)
+            merged_candles["close"].append(close_val)
+            merged_candles["volume"].append(np.max(vol_vals))
+            if candle_sizes:
+                merged_candles["candle_size"].append(max(candle_sizes))
+            elif "candle_size" in merged_candles:
+                merged_candles["candle_size"].append(0)
 
-    return merged_candles
+    return {k: np.array(v, dtype=float) for k, v in merged_candles.items()}
 
 
 def interpolate(data, oldperiod, newperiod):

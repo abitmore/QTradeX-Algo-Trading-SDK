@@ -555,7 +555,7 @@ def rotate(data):
 
 def expand_bools(bool_list, side="both"):
     if not np.any(bool_list):
-        return []
+        return bool_list
     # Create a new list with the same length, initialized to False (or 0)
     lagged_list = [False] * len(bool_list)
     for i in range(len(bool_list) - 1):

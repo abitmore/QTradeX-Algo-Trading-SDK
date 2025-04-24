@@ -1,4 +1,5 @@
 import hashlib
+import warnings
 from functools import wraps
 
 import cachetools
@@ -56,6 +57,19 @@ def cache(func):
 def float_period(*periods):
     def decorator(func):
         def wrapper(*args, **kwargs):
-            return cython_float_period(func, args, periods)
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter("always")  # Catch all warnings
+                result = cython_float_period(func, args, periods)
+
+                # Check if any warnings were raised
+                if w:
+                    for warning in w:
+                        print(
+                            "A warning occurred during float_period, "
+                            "check that your period is not less than 1 and "
+                            f"that '{func.__name__}' does not create infinities:\n"
+                            + str(warning.message)
+                        )
+            return result
         return wrapper
     return decorator

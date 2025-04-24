@@ -15,7 +15,9 @@ from qtradex.public.klines_alphavantage import (klines_alphavantage_crypto,
 from qtradex.public.klines_bitshares import klines_bitshares
 from qtradex.public.klines_ccxt import BadTimeframeError, klines_ccxt
 from qtradex.public.klines_cryptocompare import klines_cryptocompare
+from qtradex.public.klines_fdr import klines_fdr
 from qtradex.public.klines_synthetic import klines_synthetic
+from qtradex.public.klines_yahoo import klines_yahoo
 from qtradex.public.utilities import (clip_to_time_range, implied, invert,
                                       merge_candles, quantize_unix,
                                       reaggregate)
@@ -32,7 +34,7 @@ def parse_date(date_str):
         return time.mktime(datetime.strptime(date_str, "%Y-%m-%d").timetuple())
     except ValueError:
         raise ValueError(
-            f"Date must be in YY-MM-DD format or a Unix timestamp; got {date_str}"
+            f"Date must be in YYYY-MM-DD format or a Unix timestamp; got {date_str}"
         )
 
 
@@ -61,22 +63,11 @@ class Data:
         if days is not None and end is not None:
             raise ValueError("`days` OR `end` may be given, not both.")
 
-        try:
-            self.begin = parse_date(begin)
-        except Exception as error:
-            raise ValueError(
-                "`begin` must be in YY-MM-DD format or a Unix timestamp."
-            ) from error
-
+        self.begin = parse_date(begin)
         if end is None and days is not None:
             self.end = int(self.begin - (86400 * days))
         elif days is None and end is not None:
-            try:
-                self.end = parse_date(end)
-            except Exception as error:
-                raise ValueError(
-                    "`end` must be in YY-MM-DD format or a Unix timestamp."
-                ) from error
+            self.end = parse_date(end)
         else:
             # Default to now
             self.end = int(time.time())
@@ -400,12 +391,13 @@ class Data:
             exchange_functions = {
                 "bitshares": klines_bitshares,
                 "cryptocompare": klines_cryptocompare,
-                "alphavantage_stocks": klines_alphavantage_stocks,
-                "alphavantage_forex": klines_alphavantage_forex,
-                "alphavantage_crypto": klines_alphavantage_crypto,
+                "alphavantage stocks": klines_alphavantage_stocks,
+                "alphavantage forex": klines_alphavantage_forex,
+                "alphavantage crypto": klines_alphavantage_crypto,
                 "synthetic": klines_synthetic,
+                "yahoo": klines_yahoo,
+                "finance data reader": klines_fdr,
             }
-
             if self.exchange in exchange_functions:
                 if self.exchange == "synthetic":
                     raw_candles = exchange_functions[self.exchange]()
