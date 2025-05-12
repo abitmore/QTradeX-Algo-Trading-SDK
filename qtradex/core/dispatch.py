@@ -67,7 +67,8 @@ def dispatch(bot, data, wallet=None, **kwargs):
         "Optimize",    
         "Papertrade",
         "Live",
-        "Show Fill Orders"
+        "Show Fill Orders",
+        "AutoBacktest",
     ]
     choice = select(options)
 
@@ -119,3 +120,5 @@ def dispatch(bot, data, wallet=None, **kwargs):
             qx.core.live(bot, data, api_key, api_secret, dust, **kwargs)
         elif choice == 4:
             qx.core.filltest(bot, data, api_key, api_secret)
+    elif choice == 5:
+        qx.core.auto_backtest(bot, data, wallet, **kwargs)

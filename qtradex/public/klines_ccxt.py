@@ -140,7 +140,7 @@ def paginate_candles(api, start, end, interval):
     data.extend(last_chunk)
     depth -= len(last_chunk)
     # If that didn't return enough
-    while depth > 0:
+    while depth > 0 and last_chunk:
         # Find how many are left
         print(f"Only got {len(last_chunk)} datapoints, {depth} left.")
         # Tick forward, but leave an `overlap`

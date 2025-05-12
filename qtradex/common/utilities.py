@@ -62,6 +62,11 @@ def print_table(data, x_pos=-1, y_pos=0, render=False, colors=None, pallete=None
     data2 = [[None for _ in data] for _ in data[0]]
     justs = []
     for cdx, column in enumerate(data):
+        for celldx, cell in enumerate(column):
+            if isinstance(cell, np.ndarray):
+                column[
+                    celldx
+                ] = f"<ndarray of {functools.reduce(lambda x,y:x*y, cell.shape)} items>"
         justs.append(
             max(
                 len(str(sigfig(cell, 4) if isinstance(cell, float) else cell))
@@ -241,7 +246,7 @@ def write_file(path, contents):
     - contents: The data to write to the file.
     """
     with open(path, "w") as handle:
-        handle.write(json.dumps(contents, indent=1))
+        handle.write(json.dumps(contents, indent=1, cls=NdarrayEncoder))
 
 
 def race_write(doc="", text=""):
@@ -344,7 +349,7 @@ def json_ipc(doc="", text="", initialize=False, append=False):
     if not act == "appending":
         tag = "<<< JSON IPC >>>"
     # determine where we are in the file system; change directory to pipe folder
-    path = f"{os.path.dirname(os.path.abspath(__file__))}/pipe"
+    path = f"{PATH}/pipe"
     # ensure we're writing json then add prescript and postscript for clipping
     try:
         text = tag + json_dumps(json_loads(text)) + tag if text else text
@@ -487,6 +492,26 @@ class NonceSafe:
                         )
 
 
+class NdarrayEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.ndarray):
+            return {"numpy_array": obj.tolist(), "dtype": obj.dtype.str}
+        return json.JSONEncoder.default(self, obj)
+
+
+class NdarrayDecoder(json.JSONDecoder):
+    def __init__(self, *args, **kwargs):
+        super().__init__(object_hook=self.object_hook, *args, **kwargs)
+
+    def object_hook(self, obj):
+        if "numpy_array" in obj and "dtype" in obj:
+            # Reconstruct the numpy array from the JSON object
+            array_data = obj["numpy_array"]
+            dtype_str = obj["dtype"]
+            return np.array(array_data, dtype=dtype_str)
+        return obj
+
+
 # DATE UTILS
 # ======================================================================
 def from_iso_date(date):
@@ -522,6 +547,19 @@ def clock():
     current 24 hour clock, local time, formatted HH:MM:SS
     """
     return str(time.ctime())[11:19]
+
+
+def parse_date(date_str):
+    # Check if the input is a Unix timestamp (integer or float)
+    if isinstance(date_str, (int, float)):
+        return date_str
+    # Try parsing the date in the YY-MM-DD format
+    try:
+        return time.mktime(datetime.strptime(date_str, "%Y-%m-%d").timetuple())
+    except ValueError:
+        raise ValueError(
+            f"Date must be in YYYY-MM-DD format or a Unix timestamp; got {date_str}"
+        )
 
 
 # MISC
@@ -599,7 +637,7 @@ def truncate(*args):
     removing "oldest" data when newest is to the right
     """
     minlen = min(map(len, args))
-    return tuple(i[:minlen] for i in args)
+    return tuple(i[-minlen:] for i in args)
 
 
 class Period:

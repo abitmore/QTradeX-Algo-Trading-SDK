@@ -1,5 +1,6 @@
 import json
 import time
+from pprint import pprint
 
 import numpy as np
 import qtradex as qx
@@ -7,7 +8,7 @@ from qtradex.common.utilities import it, rotate, sigfig
 from qtradex.core.base_bot import Info
 from qtradex.core.quant import preprocess_states, slice_candles
 from qtradex.core.ui_utilities import logo
-from qtradex.private.signals import Buy, Sell, Thresholds
+from qtradex.private.signals import Buy, Hold, Sell, Thresholds
 from qtradex.private.wallet import PaperWallet
 
 
@@ -67,6 +68,7 @@ def determine_execution_price(operation, wallet, price, execution, asset, curren
     low, high = sorted([price["open"], price["close"]])
     low = (low + price["low"])/2
     high = (high + price["high"])/2
+    # low, high = sorted([price["low"], price["high"]])
 
     if isinstance(operation, Thresholds):
         if wallet[asset]:
@@ -112,7 +114,7 @@ def perform_trade(operation, wallet, asset, currency, execution):
         volume = min(wallet[currency], operation.maxvolume)
         if not volume:
             return wallet, None
-        wallet[asset] += volume / execution
+        wallet[asset] += (volume / execution) * (1-wallet.fee/100)
         wallet[currency] -= volume
 
     elif isinstance(operation, Sell):
@@ -120,7 +122,7 @@ def perform_trade(operation, wallet, asset, currency, execution):
         if not volume:
             return wallet, None
         wallet[asset] -= volume
-        wallet[currency] += volume * execution
+        wallet[currency] += (volume * execution) * (1-wallet.fee/100)
 
     return wallet, operation
 
@@ -161,6 +163,8 @@ def backtest(
     # Initialize bot info if not already set
     if not hasattr(bot, "info"):
         bot.info = Info({"mode": "backtest"})
+        # This line is for debug purposes, it creates a "live" style plot during a backtest
+        # bot.info = Info({"mode": "live", "live_data":data.fine_data, "start":data.end})
 
     # Initialize wallet if not provided
     if wallet is None:
@@ -205,6 +209,8 @@ def backtest(
     last_trade_time = 0
 
     ticks = 0
+    if fine_data is None and data.fine_data is not None:
+        fine_data = data.fine_data
 
     # Main backtesting loop
     while now <= end:
@@ -220,8 +226,7 @@ def backtest(
             now += candle_size
             continue  # Skip to the next time step if tick data is not available
 
-        fine_tick_data = get_fine_tick_data(data, fine_data, now-candle_size)
-
+        fine_tick_data = get_fine_tick_data(data, fine_data, now)#-candle_size)
         # Protect the wallet from accidental modifications
         wallet._protect()
         indicators = tick_data["indicators"]
@@ -230,25 +235,37 @@ def backtest(
             indicators,
         )
 
-        # Store the last trade operation
-        if operation is not None:
-            last_trade = operation
-
         # Check if enough time has passed to trade again
         if (
+
+            # If the elapsed time since last trade 
+            # is greater than the largest candle size in the dataset
             (now - last_trade_time >= data.base_size)
-            or (always_trade and isinstance(always_trade, bool))
+            
+
+            # we can also pass "always_trade" as a kwarg to backtest()
+            or (always_trade is True)
+
+
+            # Smart mode means that the elapsed time is greater than the candle size we're using during this moment of the backtest.  
+            # That is... some backtests we use finer grain data with daily high/low.
+            # In the case of "we're currently using daily candles"; then only trade once daily
+            
             or (
                 always_trade == "smart"
                 and (now - last_trade_time) >= fine_tick_data["candle_size"]
             )
-        ):
+        ) and not isinstance(operation, Hold):
             if operation is not None:
                 wallet._release()  # Release write protection to perform trade
                 wallet, operation = trade(
                     data.asset, data.currency, operation, wallet, fine_tick_data, now
                 )
                 last_trade_time = now
+
+                # Store the last trade operation
+                if operation is not None:
+                    last_trade = operation
         else:
             operation = None  # No trade executed
 
@@ -286,6 +303,8 @@ def backtest(
     raw_states = states
     states = preprocess_states(states, (data.asset, data.currency))
     states["days"] = days
+    states["begin"] = raw_states["unix"][0]
+    states["end"] = raw_states["unix"][-1]
 
     # Calculate fitness metrics
     keys, custom = bot.fitness(states, raw_states, data.asset, data.currency)
@@ -316,7 +335,7 @@ def backtest(
 
 
 def print_backtest_results(bot, states, data, ret, ticks, candle_size):
-    print(json.dumps(bot.tune, indent=4))
+    pprint(bot.tune, indent=4)
     for op in states["detailed_trades"]:
         if op["roi"] >= 1:
             print(
@@ -353,11 +372,13 @@ def adjust_tuning_parameters(bot, candle_size):
     - candle_size: The size of the candles in seconds.
     """
     for k, v in list(bot.tune.items()):
-        if k.endswith("_period"):
+        if k.endswith("_period") or k.endswith("_periods"):
             if isinstance(v, float):
                 bot.tune[k] = v * (86400 / candle_size)
-            else:
+            elif isinstance(v, int):
                 bot.tune[k] = int(v * (86400 / candle_size))
+            elif isinstance(v, np.ndarray):
+                bot.tune[k] = (v * (86400 / candle_size)).astype(v.dtype)
 
 
 def get_fine_tick_data(data, fine_data, now):

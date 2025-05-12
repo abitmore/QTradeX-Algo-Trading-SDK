@@ -30,6 +30,7 @@ import getopt
 import itertools
 import json
 import math
+import os
 import shutil
 import time
 from copy import deepcopy
@@ -59,7 +60,7 @@ class LSGAoptions(QPSOoptions):
         self.population = 20
         self.offspring = 10
         self.top_ratio = 0.05
-        self.processes = 3
+        self.processes = os.cpu_count() or 3
         self.fitness_ratios = None
         self.fitness_period = 20
         self.fitness_inversion = lambda x: dict(
@@ -69,7 +70,7 @@ class LSGAoptions(QPSOoptions):
         self.cyclic_freq = 25
         self.erode = 0.9999
         self.erode_freq = 200
-        self.temperature = 0.005
+        self.temperature = 1  # 10 (coarse) to 0.0001 (fine)
         self.epochs = math.inf
         self.improvements = 10000
         self.cooldown = 0
@@ -89,14 +90,18 @@ def printouts(kwargs):
     table.append([""] + kwargs["parameters"] + [""] + kwargs["coords"] + [""])
     table.append(
         ["current test"]
-        + list(kwargs["bot"].tune.values())
+        + [kwargs["bot"].tune[param] for param in kwargs["parameters"]]
         + [""]
-        + list(kwargs["new_score"].values())
+        + [kwargs["new_score"][coord] for coord in kwargs["coords"]]
         + [""]
     )
     for coord, (score, bot) in kwargs["best_bots"].items():
         table.append(
-            [coord] + list(bot.tune.values()) + [""] + list(score.values()) + ["###"]
+            [coord]
+            + [bot.tune[param] for param in kwargs["parameters"]]
+            + [""]
+            + [score[coord] for coord in kwargs["coords"]]
+            + ["###"]
         )
 
     n_coords = len(kwargs["coords"])
@@ -125,7 +130,7 @@ def printouts(kwargs):
     )
     for coord in kwargs["boom"]:
         cdx = kwargs["coords"].index(coord)
-        colors[len(kwargs["parameters"])+2+cdx, cdx+2] = 3
+        colors[len(kwargs["parameters"]) + 2 + cdx, cdx + 2] = 3
 
     msg = "\033c"
     msg += it(
@@ -140,7 +145,7 @@ def printouts(kwargs):
         f"\ntest {kwargs['iteration']} improvements {kwargs['improvements']} synapses"
         f" {len(kwargs['synapses'])}"
     )
-    msg += f"\npath {kwargs['path']:.4f} aegir {kwargs['aegir']:.4f}"
+    msg += f"\naegir {kwargs['aegir']}"
     msg += f"\n{kwargs['synapse_msg']} {it('yellow', kwargs['neurons'])}"
     msg += f"\n\n{((kwargs['n_backtests'] or 1)/(time.time()-kwargs['lsga_start'])):.2f} Backtests / Second"
     msg += f"\nRunning on {kwargs['self'].data.days} days of data."
@@ -246,7 +251,7 @@ class LSGA(QPSO):
                 Process(
                     target=retest_process,
                     args=(bot, self.data, self.wallet, todo, done),
-                    kwargs=kwargs
+                    kwargs=kwargs,
                 )
                 for _ in range(self.options.processes)
             ]
@@ -280,7 +285,9 @@ class LSGA(QPSO):
                         }
 
                     # Synaptogenesis: Considering new neuron connections
-                    neurons = self.options.neurons or list(bot.tune.keys())
+                    neurons = self.options.neurons or [
+                        i for i in bot.tune.keys() if bot.clamps[i][3]
+                    ]
                     for _ in range(3):
                         neurons = sample(population=neurons, k=randint(1, len(neurons)))
                     neurons.sort()
@@ -307,14 +314,25 @@ class LSGA(QPSO):
                     for botdx, bot in enumerate(bots):
                         # Quantum particle drunkwalk: Alter neurons in selected synapse
                         for neuron in neurons:
+                            if not bot.clamps[neuron][3]:
+                                continue
+
                             aegir, path = self.entheogen(
-                                idx, list(bot.tune.keys()).index(neuron) / len(bot.tune)
+                                idx,
+                                list(bot.tune.keys()).index(neuron) / len(bot.tune),
+                                bot.tune[neuron].shape
+                                if isinstance(bot.tune[neuron], np.ndarray)
+                                else None,
+                                bot.clamps[neuron][0],  # min
+                                bot.clamps[neuron][2],  # max
+                                # is it a numpy array of ints?
+                                np.issubdtype(bot.tune[neuron].dtype, np.integer)
+                                # if it is a numpy array,
+                                if isinstance(bot.tune[neuron], np.ndarray)
+                                # else is it a single int?
+                                else isinstance(bot.tune[neuron], int),
                             )
-                            if isinstance(bot.tune[neuron], float):
-                                bot.tune[neuron] *= path
-                                bot.tune[neuron] += (random() - 0.5) / 1000
-                            elif isinstance(bot.tune[neuron], int):
-                                bot.tune[neuron] += randint(-2, 2)
+                            bot.tune[neuron] += path
 
                         # Bound neurons to reasonable values
                         bound_neurons(bot)

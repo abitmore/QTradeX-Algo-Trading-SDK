@@ -13,6 +13,7 @@ import cython
 import numpy as np
 import numpy.typing as npt
 import qtradex
+import tulipy as ti
 from numpy import ndarray
 from qtradex.common.utilities import truncate
 from qtradex.indicators import tulipy_wrapped as ti
@@ -733,92 +734,54 @@ def eri(
 
 @cache
 @float_period(3)
-def super_trend(
-    high: npt.NDArray[DATA_TYPE],
-    low: npt.NDArray[DATA_TYPE],
-    close: npt.NDArray[DATA_TYPE],
-    atr_period: cython.int,
-    multiplier: float,  # 3.0
-) -> tuple[npt.NDArray[DATA_TYPE], npt.NDArray[DATA_TYPE], npt.NDArray[DATA_TYPE]]:
+def supertrend(
+    high: cnp.ndarray[DATA_TYPE],
+    low: cnp.ndarray[DATA_TYPE],
+    close: cnp.ndarray[DATA_TYPE],
+    period: int,
+    multiplier_top: float,
+    multiplier_bottom: float,
+) -> tuple[cnp.ndarray[DATA_TYPE], cnp.ndarray[DATA_TYPE], cnp.ndarray[DATA_TYPE]]:
     """
-    Calculate the Super Trend Indicator.
+    Calculate the Supertrend indicator.
 
     Parameters:
-    - high: A NumPy array of high prices.
-    - low: A NumPy array of low prices.
-    - close: A NumPy array of close prices.
-    - atr_period: The period for calculating the ATR.
-    - multiplier: The multiplier for the ATR to set the Super Trend bands (default is 3.0).
-
-    Returns:
-    - A tuple containing:
-        - A NumPy array of Super Trend values.
-        - A NumPy array of uptrend values.
-        - A NumPy array of downtrend values.
+    - high (array-like): Array of high prices.
+    - low (array-like): Array of low prices.
+    - close (array-like): Array of close prices.
+    - period (int): Period for ATR calculation (default: 14).
+    - multiplier (float): Multiplier for the bands (default: 3).
     """
-    # Calculate True Range (TR) using the qi.tr function
-    tr = ti.tr(high, low, close)
+    trailing_high = np.empty(high.shape[0] - period)
+    trailing_low = np.empty(low.shape[0] - period)
+    for idx in range(len(high) - period):
+        trailing_high[idx] = np.max(high[idx : idx + period])
+        trailing_low[idx] = np.min(low[idx : idx + period])
 
-    # Calculate Average True Range (ATR) using the qi.atr function
-    atr = ti.atr(high, low, close, atr_period)
+    # Calculate the ATR using Tulipy
+    atr = ti.atr(high, low, close, period)
 
-    # Calculate H/L Average
-    hl_avg = (high + low) / 2
+    # Calculate the average of high and low
+    hla = (trailing_high + trailing_low) / 2
+    hla, atr = qtradex.common.utilities.truncate(hla, atr)
 
-    # Initialize upper and lower bands with NaN
-    upper_band = np.full_like(close, np.nan, dtype=DATA_TYPE)
-    lower_band = np.full_like(close, np.nan, dtype=DATA_TYPE)
+    # Initialize basic upper and lower bands
+    upperband = hla + (multiplier_top * atr)
+    lowerband = hla - (multiplier_bottom * atr)
+    close, _ = qtradex.common.utilities.truncate(close, atr)
 
-    # Calculate upper and lower bands only where ATR is valid
-    valid = np.where(~np.isnan(atr))[0]
-    upper_band[valid] = hl_avg[valid] + (multiplier * atr[valid])
-    lower_band[valid] = hl_avg[valid] - (multiplier * atr[valid])
-
-    # Initialize final bands
-    final_upper = np.zeros_like(close)
-    final_lower = np.zeros_like(close)
-    final_upper[0] = upper_band[0] if not np.isnan(upper_band[0]) else 0
-    final_lower[0] = lower_band[0] if not np.isnan(lower_band[0]) else 0
-
-    # Calculate final upper band
-    for i in range(1, len(final_upper)):
-        if upper_band[i] < final_upper[i - 1] or close[i - 1] > final_upper[i - 1]:
-            final_upper[i] = upper_band[i]
+    supertrend = []
+    toggle = close[0] > lowerband[0]
+    for u, l, c in zip(upperband, lowerband, close):
+        if toggle and c < l:
+            toggle = False
+        elif not toggle and u < c:
+            toggle = True
+        if toggle:
+            supertrend.append(l)
         else:
-            final_upper[i] = final_upper[i - 1]
-
-    # Calculate final lower band
-    for i in range(1, len(final_lower)):
-        if lower_band[i] > final_lower[i - 1] or close[i - 1] < final_lower[i - 1]:
-            final_lower[i] = lower_band[i]
-        else:
-            final_lower[i] = final_lower[i - 1]
-
-    # Calculate Super Trend
-    supertrend = np.zeros_like(close)
-    supertrend[0] = 0  # Initial value
-
-    for i in range(1, len(supertrend)):
-        if supertrend[i - 1] == final_upper[i - 1] and close[i] < final_upper[i]:
-            supertrend[i] = final_upper[i]
-        elif supertrend[i - 1] == final_upper[i - 1] and close[i] > final_upper[i]:
-            supertrend[i] = final_lower[i]
-        elif supertrend[i - 1] == final_lower[i - 1] and close[i] > final_lower[i]:
-            supertrend[i] = final_lower[i]
-        elif supertrend[i - 1] == final_lower[i - 1] and close[i] < final_lower[i]:
-            supertrend[i] = final_upper[i]
-
-    # Initialize uptrend and downtrend arrays
-    upt = np.full_like(close, np.nan, dtype=DATA_TYPE)
-    dt = np.full_like(close, np.nan, dtype=DATA_TYPE)
-
-    for i in range(len(supertrend)):
-        if close[i] > supertrend[i]:
-            upt[i] = supertrend[i]
-        elif close[i] < supertrend[i]:
-            dt[i] = supertrend[i]
-
-    return supertrend, upt, dt
+            supertrend.append(u)
+    return supertrend, upperband, lowerband
 
 
 @cache
@@ -1001,7 +964,6 @@ def kagi(
             # No change in direction, keep the last Kagi point
             kagi.append(kagi[-1])
 
-
     print("kagi", kagi, "\n", np.array(kagi))
     return (np.array(kagi),)
 
@@ -1178,6 +1140,7 @@ def price_action(
 
     return np.array(support_levels), np.array(resistance_levels)
 
+
 @cache
 @float_period(1)
 def holt_winters_des(
@@ -1219,6 +1182,7 @@ def holt_winters_des(
 
     return s, b
 
+
 @cache
 @float_period(1)
 def ulcer_index(
@@ -1255,6 +1219,7 @@ def ulcer_index(
     ulcer_idx = np.nan_to_num(ulcer_idx, nan=0.0)
 
     return ulcer_idx
+
 
 @cache
 @float_period(1)
@@ -1422,8 +1387,6 @@ def earsi(
     return (np.array(adaptive_rsi),)
 
 
-
-
 def vhf(
     data: npt.NDArray[np.float64],
     period: cython.int,
@@ -1445,14 +1408,13 @@ def vhf(
     - A NumPy array of shape (n,) containing the VHF values.
     """
 
-
     vhf = np.empty_like(data)
     vhf.fill(np.nan)  # Initialize with NaN for non-computable values
 
     for idx in range(period - 1, len(data)):
-        high = np.max(data[idx + 1 - period:idx + 1])
-        low = np.min(data[idx + 1 - period:idx + 1])
-        price_changes = np.abs(np.diff(data[idx + 1 - period:idx + 1]))
+        high = np.max(data[idx + 1 - period : idx + 1])
+        low = np.min(data[idx + 1 - period : idx + 1])
+        price_changes = np.abs(np.diff(data[idx + 1 - period : idx + 1]))
 
         if np.sum(price_changes) != 0:  # Avoid division by zero
             vhf[idx] = abs(high - low) / np.sum(price_changes)

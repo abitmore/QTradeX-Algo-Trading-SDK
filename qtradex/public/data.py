@@ -55,6 +55,7 @@ class Data:
         pool=None,
         api_key=None,
         intermediary=None,
+        placeholder=False,
     ):
         """
         See type(self) for accurate signature.
@@ -83,6 +84,7 @@ class Data:
         self.base_size = int(candle_size)
         self.begin = math.ceil(self.begin / candle_size) * candle_size
         self.end = math.ceil(self.end / candle_size) * candle_size
+        self.fine_data = None
         self.api_key = api_key
 
         if self.pool is not None and exchange != "bitshares":
@@ -93,34 +95,34 @@ class Data:
         self.raw_candles = {}
 
         self.intermediary = intermediary
+        if not placeholder:
+            if intermediary is None:
+                self.raw_candles = self.retrieve_and_cache_candles(
+                    self.candle_size, self.asset, self.currency
+                )
+            else:
+                if DETAIL:
+                    print(f"Using {intermediary} to create implied price...")
+                self.raw_candles = implied(
+                    self.retrieve_and_cache_candles(
+                        self.candle_size, self.asset, self.intermediary
+                    ),
+                    self.retrieve_and_cache_candles(
+                        self.candle_size, self.intermediary, self.currency
+                    ),
+                )
 
-        if intermediary is None:
-            self.raw_candles = self.retrieve_and_cache_candles(
-                self.candle_size, self.asset, self.currency
-            )
-        else:
-            if DETAIL:
-                print(f"Using {intermediary} to create implied price...")
-            self.raw_candles = implied(
-                self.retrieve_and_cache_candles(
-                    self.candle_size, self.asset, self.intermediary
-                ),
-                self.retrieve_and_cache_candles(
-                    self.candle_size, self.intermediary, self.currency
-                ),
-            )
+            if np.any(self.raw_candles["unix"]):
+                self.raw_candles["unix"] = quantize_unix(
+                    self.raw_candles["unix"], self.candle_size
+                )
 
-        if np.any(self.raw_candles["unix"]):
-            self.raw_candles["unix"] = quantize_unix(
-                self.raw_candles["unix"], self.candle_size
-            )
-
-            self.begin = np.min(self.raw_candles["unix"])
-            self.end = np.max(self.raw_candles["unix"])
-        # else:
-        #     raise RuntimeError(
-        #         f"{self.exchange} does not provide {self.asset}/{self.currency} for this time range."
-        #     )
+                self.begin = np.min(self.raw_candles["unix"])
+                self.end = np.max(self.raw_candles["unix"])
+            # else:
+            #     raise RuntimeError(
+            #         f"{self.exchange} does not provide {self.asset}/{self.currency} for this time range."
+            #     )
 
     def __repr__(self):
         """

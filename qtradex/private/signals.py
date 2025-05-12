@@ -31,3 +31,9 @@ class Thresholds(SignalBase):
         self.profit = 0
         self.buying = buying
         self.selling = selling
+
+
+class Hold(SignalBase):
+    """
+    AKA Cancel All Orders
+    """

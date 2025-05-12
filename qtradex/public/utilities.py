@@ -26,12 +26,7 @@ def clip_to_time_range(candles, start_unix, end_unix):
 
     # Clip the dictionary by keeping only the valid indices
     clipped_candles = {
-        "unix": candles["unix"][valid_indices],
-        "high": candles["high"][valid_indices],
-        "low": candles["low"][valid_indices],
-        "open": candles["open"][valid_indices],
-        "close": candles["close"][valid_indices],
-        "volume": candles["volume"][valid_indices],
+        key: candles[key][valid_indices] for key in candles
     }
 
     return clipped_candles
@@ -253,6 +248,9 @@ def interpolate(data, oldperiod, newperiod):
 
 
 def create_candles(data, width=86400, stride=600):
+    """
+    Create OHLCV candles given a list of (unix, price, volume) tuples
+    """
     candles = []
     data = np.array(data)
 
@@ -312,9 +310,7 @@ def reaggregate(data, candle_size, stride=None):
                     data["volume"],
                     data.get(
                         "candle_size",
-                        np.array(
-                            [data["unix"][1] - data["unix"][0]] * len(data["unix"])
-                        ),
+                        np.full(data["unix"].shape, data["unix"][1] - data["unix"][0]),
                     ),
                 )
             ]

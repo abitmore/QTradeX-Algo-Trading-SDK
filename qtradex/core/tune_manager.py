@@ -6,7 +6,8 @@ import os
 import time
 from datetime import datetime
 
-from qtradex.common.utilities import it, read_file, write_file
+from qtradex.common.utilities import (NdarrayDecoder, NdarrayEncoder, it,
+                                      read_file, write_file)
 from qtradex.core.ui_utilities import get_number, logo
 
 
@@ -56,7 +57,7 @@ def save_tune(bot, identifier=None):
 
     # Attempt to read existing contents from the file
     try:
-        contents = json.loads(read_file(filename))
+        contents = json.loads(read_file(filename), cls=NdarrayDecoder)
     except (FileNotFoundError, json.decoder.JSONDecodeError):
         contents = {"source": source}  # Initialize with source if file doesn't exist
 
@@ -72,9 +73,11 @@ def save_tune(bot, identifier=None):
         identifier += f"_{time.ctime()}"
 
     # Remove duplicate tunes if they are unlabeled
-    if bot.tune in contents.values():
+    if json.dumps(bot.tune, cls=NdarrayEncoder) in [
+        json.dumps(i, cls=NdarrayEncoder) for i in contents.values()
+    ]:
         for k, v in contents.copy().items():
-            if v == bot.tune and "_" not in k:
+            if json.dumps(v, cls=NdarrayEncoder) == json.dumps(bot.tune, cls=NdarrayEncoder) and "_" not in k:
                 contents.pop(k)
 
     contents[identifier] = bot.tune  # Save the new tune
@@ -116,7 +119,7 @@ def load_tune(bot, key=None, sort="roi"):
         filename = generate_filename(bot)[0]
 
     try:
-        contents = json.loads(read_file(filename))
+        contents = json.loads(read_file(filename), cls=NdarrayDecoder)
     except FileNotFoundError:
         raise FileNotFoundError("The given bot has no saved tunes.")
 
@@ -129,13 +132,13 @@ def load_tune(bot, key=None, sort="roi"):
             )[0]
         else:
             key = max(
-            [
-                i
-                for i in contents.keys()
-                if i != "source" and i.rsplit("_", 1)[0] == "BEST ROI TUNE"
-            ],
-            key=lambda x: from_iso_date(x.rsplit("_", 1)[1]),
-        )
+                [
+                    i
+                    for i in contents.keys()
+                    if i != "source" and i.rsplit("_", 1)[0] == "BEST ROI TUNE"
+                ],
+                key=lambda x: from_iso_date(x.rsplit("_", 1)[1]),
+            )
 
     if key not in contents:
         # Get the latest key of this name if the specified key is not found
@@ -154,7 +157,9 @@ def load_tune(bot, key=None, sort="roi"):
         if key:
             key = key[0]
         else:
-            raise KeyError("Unknown tune key. Try using `get_tunes(bot)` to find stored tunes.")
+            raise KeyError(
+                "Unknown tune key. Try using `get_tunes(bot)` to find stored tunes."
+            )
 
     return contents[key]["tune"]  # Return the loaded tune
 
@@ -228,7 +233,7 @@ def choose_tune(bot, kind="any"):
         bot = generate_filename(bot)[0]
 
     try:
-        contents = json.loads(read_file(bot))
+        contents = json.loads(read_file(bot), cls=NdarrayDecoder)
     except FileNotFoundError:
         raise FileNotFoundError("This bot has no saved tunes!")
 
@@ -236,19 +241,25 @@ def choose_tune(bot, kind="any"):
         contents.pop("source")  # Remove source if only tunes are needed
 
     # Create a dispatch dictionary for user selection
+    best_key = max(
+        {k: v for k, v in contents.items() if k != "source"}.items(),
+        key=lambda x: x[1]["results"]["roi"],
+    )[0]
     dispatch = {
-        0: max(
-            {k: v for k, v in contents.items() if k != "source"}.items(),
-            key=lambda x: x[1]["results"]["roi"],
-        )[0]
+        0: (best_key, contents[best_key]),
     }
-    dispatch.update(enumerate(list(contents.keys()), start=1))
+    dispatch.update(enumerate(list(contents.items()), start=1))
 
     logo()  # Display logo
-    for k, v in dispatch.items():
-        print(f"  {k}: {v}")  # Print available options
+    for num, (k, v) in dispatch.items():
+        if k == "source":
+            print(f"  {num}: {k}")
+        else:
+            print(
+                f"  {num}: {v['results']['roi']:.2f} ROI - {k}"
+            )  # Print available options
 
-    option = dispatch[get_number(dispatch)]  # Get user choice
+    option = dispatch[get_number(dispatch)][0]  # Get user choice
     choice = contents[option]  # Retrieve the chosen tune
 
     return choice["tune"] if kind == "tune" else choice  # Return the appropriate choice
@@ -277,7 +288,9 @@ def main():
         dispatch = dict(enumerate(algorithms + ["Exit"], start=1))
         print(it("yellow", "Bot save states, most recent first:"))
         for k, v in dispatch.items():
-            print(f"  {k}: {os.path.splitext(os.path.split(v)[1])[0]}")  # Display saved tunes
+            print(
+                f"  {k}: {os.path.splitext(os.path.split(v)[1])[0]}"
+            )  # Display saved tunes
 
         choice = get_number(dispatch)  # Get user choice
 

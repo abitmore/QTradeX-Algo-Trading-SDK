@@ -22,6 +22,7 @@ Fitness:
   - **Hurst Exponent**: Measures the long-term memory of the
 """
 import functools
+import itertools
 import math
 
 import numpy as np
@@ -51,7 +52,7 @@ def roi_currency(balances, prices, pair):
     roi_currency = end_max_currency / storage["begin_max_currency"]
 
 
-def roi_gross(balances, prices, pair):
+def roi_gross(balances, prices, pair, fee=0):
     """
     # Calculate the geometric mean of the return on investment
     sqrt(roi_assets*roi_currency)
@@ -112,7 +113,7 @@ def sortino_ratio(roi, losses=[], risk_free_rate=1.05):
     )
 
     if downside_deviation == 0:
-        downside_deviation = 1  
+        downside_deviation = 1
 
     return (roi - risk_free_rate) / downside_deviation
 
@@ -129,7 +130,7 @@ def maximum_drawdown(balances):
     """
     peak = max(balances)
     trough = min(balances)
-    return ((peak - trough) / peak)
+    return (peak - trough) / peak
 
 
 def calmar_ratio(cagr_value, maximum_drawdown_value):
@@ -335,27 +336,49 @@ def hurst_exponent(trades):
     return np.log(R / S) / np.log(n) if n > 0 else 0
 
 
-def days_per_trade(trades, days, target):
-    print(len(trades), days, target)
-    if len(trades) == target:
+def days_per_trade(states, target, roi):
+    trades = states["detailed_trades"]
+    days = states["days"]
+    begin = states["begin"]
+    end = states["end"]
+    if len(trades) < 2:
+        return float("-inf")
+
+    if days / len(trades) == target:
         return 1
 
-    abs_value = abs(days / (len(trades) - target))
-    min_value = min(abs_value, days)
-    print(min_value/days)
-    return min_value / days
+    elapseds = [
+        (t1 - t2) / 86400 for t2, t1 in itertools.pairwise([begin, *[i["unix"] for i in trades], end])
+    ]
+    raw_dpt = sorted(elapseds)[(len(trades) - 1) // 2]
+
+    # raw_dpt = (days / len(trades))
+    ret = (
+        - abs(target - raw_dpt)
+        - abs(target - min(elapseds))
+        - abs(target - max(elapseds))
+    )
+
+    return ret / roi
 
 
 def fitness(keys, states, raw_states, asset, currency):
     # Initialize a dictionary to hold the results
     results = {}
+    roi_fee = 0
+    if any(fee_idx := [key.startswith("roi_fee_") for key in keys]):
+        roi_fee = float(keys[fee_idx.index(True)].rsplit("_", 1)[1])
+    target_dpt = 0
+    if any(target := [key.startswith("dpt_") for key in keys]):
+        target_dpt = float(keys[target.index(True)].rsplit("_", 1)[1])
+        keys.append("dpt")
 
     # Define a mapping of keys to their corresponding functions and parameters
     # fmt: off
     calculations = {
         "roi_assets": (roi_assets, (raw_states["balances"], raw_states["close"], (asset, currency))),
         "roi_currency": (roi_currency, (raw_states["balances"], raw_states["close"], (asset, currency))),
-        "roi": (roi_gross, (raw_states["balances"], raw_states["close"], (asset, currency))),
+        "roi": (roi_gross, (raw_states["balances"], raw_states["close"], (asset, currency), roi_fee)),
         "cagr": (cagr, (states["balance_values"], raw_states["unix"])),
         "sharpe_ratio": (sharpe_ratio, (None, states["wins"], states["losses"])),
         "sortino_ratio": (sortino_ratio, (None, states["losses"])),
@@ -373,6 +396,7 @@ def fitness(keys, states, raw_states, asset, currency):
         "efficiency_ratio": (efficiency_ratio, (None, states["wins"], states["losses"])),
         "drawdown_duration": (drawdown_duration, (states["detailed_trades"],)),
         "hurst_exponent": (hurst_exponent, (states["trades"],)),
+        "dpt": (days_per_trade, (states, target_dpt, None))
     }
     # fmt: on
 
@@ -385,6 +409,7 @@ def fitness(keys, states, raw_states, asset, currency):
             "alpha": ["roi", "beta"],
             "info_ratio": ["roi", "alpha"],
             "efficiency_ratio": ["roi"],
+            "dpt": ["roi"],
         }.get(key, []) + keys
 
     # and ensure they are calculated first
@@ -421,6 +446,12 @@ def fitness(keys, states, raw_states, asset, currency):
                 )
             elif key == "efficiency_ratio":
                 params = (results["roi"], states["wins"], states["losses"])
+            elif key == "dpt":
+                params = (
+                    states,
+                    target_dpt,
+                    results["roi"],
+                )
 
             # Call the function and store the result
             results[key] = func(*params)

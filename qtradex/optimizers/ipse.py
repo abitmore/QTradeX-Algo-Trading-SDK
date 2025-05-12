@@ -34,6 +34,7 @@ multiprocessing for parallelism.
 # STANDARD MODULES
 import json
 import math
+import os
 import time
 from copy import deepcopy
 from multiprocessing import Manager, Process
@@ -57,7 +58,7 @@ class IPSEoptions:
     def __init__(self):
         self.acceleration = 0.8  # controls space shrinking factor
         self.space_size = 25  # number of candidate points in parameter space
-        self.processes = 3  # number of parallel processes
+        self.processes = os.cpu_count() or 3  # number of parallel processes
         self.show_terminal = True  # whether to print optimization stats
         self.print_tune = False  # whether to print final tuned parameters
 
@@ -235,10 +236,13 @@ class IPSE:
                     for coordinate in coords:
                         # Loop over each tunable parameter
                         for parameter in bot.tune:
+                            if not bot.clamps[parameter][3]:
+                                continue
                             # Build test space of values for current parameter
                             space = np.linspace(
                                 *ranges[parameter], self.options.space_size
-                            ).tolist() + [bot.tune[parameter]]  # Add current value
+                            ).astype(type(bot.tune[parameter])).tolist() + [bot.tune[parameter]]  # Add current value
+
 
                             scores = self.retest(todo, done, bot, space, parameter)
                             idx += len(space)

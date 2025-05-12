@@ -23,7 +23,20 @@ setup(
     ],
     license="MIT",
     packages=["qtradex"],  # Adjust if you have additional packages
-    install_requires=["Cython", "setuptools>64"],
+    install_requires=[
+        "Cython",
+        "setuptools>64",
+        "cachetools",
+        "yfinance",
+        "tulipy",
+        "finance-datareader",
+        "bitshares-signing",
+        "numpy",
+        "matplotlib",
+        "scipy",
+        "Cython",
+        "ttkbootstrap",
+    ],
     entry_points={
         "console_scripts": [
             "qtradex-tune-manager=qtradex.core.tune_manager:main",

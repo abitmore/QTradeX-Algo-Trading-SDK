@@ -80,7 +80,7 @@ class QPSOoptions:
         self.cyclic_freq = 1000
         self.digress = 0.99
         self.digress_freq = 2500
-        self.temperature = 0.0002
+        self.temperature = 2  # 10 (coarse) to 0.0001 (fine)
         self.epochs = math.inf
         self.improvements = 100000
         self.cooldown = 0
@@ -137,7 +137,7 @@ def printouts(kwargs):
 
     for coord in kwargs["boom"]:
         cdx = kwargs["coords"].index(coord)
-        colors[len(kwargs["parameters"])+2+cdx, cdx+2] = 3
+        colors[len(kwargs["parameters"]) + 2 + cdx, cdx + 2] = 3
 
     msg = "\033c"
     msg += it(
@@ -153,7 +153,7 @@ def printouts(kwargs):
         f"\ntest {kwargs['iteration']} improvements {kwargs['improvements']} synapses"
         f" {len(kwargs['synapses'])}"
     )
-    msg += f"\npath {kwargs['path']:.4f} aegir {kwargs['aegir']:.4f}"
+    msg += f"\npath {kwargs['path']} aegir {kwargs['aegir']}"
     msg += f"\n{kwargs['synapse_msg']} {it('yellow', kwargs['neurons'])}"
     msg += f"\n\n{((kwargs['idx'] or 1)/(time.time()-kwargs['qpso_start'])):.2f} Backtests / Second"
     msg += f"\nRunning on {kwargs['self'].data.days} days of data."
@@ -205,19 +205,20 @@ class QPSO:
 
         return best_bots, improvements, it("green", boom), improved
 
-    def entheogen(self, i, j):
+    def entheogen(self, i, j, shape=None, min_val=0, max_val=1, is_integer=False):
         """
-        Somnambulism induces altered states of consciousness.
-            The update equation is designed to guide the particles towards
-            the optimal solution within the search space.
-            Just like sleepwalking, where individuals exhibit automatic and
-            seemingly purposeful actions while asleep, the movement of particles
-            in QPSO can also appear to be random or unconscious, yet guided
-            by certain optimization principles.
+        Somnambulism induces altered states of consciousness for n-dimensional arrays.
+        The update equation guides particles through discrete integer or continuous float
+        spaces, respecting given bounds, with a random walk inspired by cyclic annealing
+        and quantum PSO. Supports negative ranges and crossing zero.
         Args:
             i (int): The iteration number.
+            j (float): Offset for cyclic annealing.
+            shape (Union[int | tuple]): The shape of the neuron to be altered.
+            min_val (Union[int | float | np.ndarray]): Minimum value(s) for the space.
+            max_val (Union[int | float | np.ndarray]): Maximum value(s) for the space.
         Returns:
-            Tuple[float, float]: A tuple containing the calculated `aegir` and `path` values.
+            Tuple[float, np.ndarray]: A tuple containing the calculated `aegir` and `steps` values.
         """
         # Cyclic simulated annealing
         aegir = (
@@ -226,13 +227,63 @@ class QPSO:
             + 1
             + self.options.cyclic_amplitude
         )
-        # Quantum orbital pulse
-        path = 1 + random() * (self.options.temperature * aegir) ** (1 / 2.0) / 100.0
-        # Brownian iterator
-        if randint(0, 1) == 0:
-            path = 1 / path
+
+        # Ensure min_val and max_val are arrays matching the shape
+        if isinstance(min_val, (int, float)):
+            min_val = np.full(
+                shape, min_val, dtype=np.int64 if is_integer else np.float64
+            )
+        if isinstance(max_val, (int, float)):
+            max_val = np.full(
+                shape, max_val, dtype=np.int64 if is_integer else np.float64
+            )
+        range_size = max_val - min_val + 1
+
+        # Simple scalar case
+        if shape is None:
+            if is_integer:
+                # Base step size modulated by temperature and aegir
+                step_magnitude = max(
+                    1, int((self.options.temperature * aegir) ** 0.5 / 50.0) * range_size
+                )
+                # Random step within [-step_magnitude, step_magnitude]
+                steps = randint(-step_magnitude, step_magnitude + 1)
+                # Brownian iterator: occasionally invert step direction
+                if randint(0, 1) == 0:
+                    steps = -steps
+            else:
+                # Quantum orbital pulse (float)
+                path = random() * (self.options.temperature * aegir) / 100.0 * range_size
+                # Randomly choose direction to allow crossing zero
+                steps = path if randint(0, 1) == 0 else -path
+        # N-Dimensional case
+        else:
+            if is_integer:
+                # Base step size modulated by temperature and aegir
+                step_magnitude = np.maximum(
+                    1, (self.options.temperature * aegir) ** 0.5 / 50.0
+                ) * range_size
+                # Random steps within [-step_magnitude, step_magnitude] for each element
+                steps = np.random.randint(
+                    -step_magnitude, step_magnitude + 1, size=shape, dtype=np.int64
+                )
+                # Brownian iterator: invert steps for half the elements
+                mask = np.random.uniform(size=shape) > 0.5
+                steps[mask] = -steps[mask]
+            else:
+                # Quantum orbital pulse (float)
+                path = (
+                    np.random.uniform(size=shape)
+                    * (self.options.temperature * aegir)# ** 0.5
+                    / 100.0
+                )
+                # Randomly choose direction to allow crossing zero
+                direction = np.where(np.random.uniform(size=shape) > 0.5, 1, -1)
+                steps = path * direction * range_size
+                steps = steps.astype(np.float64)
+
         # Stumbling, yet remarkably determined
-        return aegir, path
+        return aegir, steps
 
     def optimize(self, bot, **kwargs):
         """
@@ -252,13 +303,17 @@ class QPSO:
         improvements = 0
         iteration = 0  # Tracks exploration loop; decremented on improvements to allow more trials
         idx = 0  # Tracks total iterations, always incremented
-        synapses = []  # Stores tuples of past successful neuron groups (parameter names)
+        synapses = (
+            []
+        )  # Stores tuples of past successful neuron groups (parameter names)
 
         bot.reset()  # Reset bot state before optimization
         bot = bound_neurons(bot)  # Constrain parameters within valid range
 
         # Initial evaluation and score setup
-        initial_result = backtest(deepcopy(bot), self.data, deepcopy(self.wallet), plot=False, **kwargs)
+        initial_result = backtest(
+            deepcopy(bot), self.data, deepcopy(self.wallet), plot=False, **kwargs
+        )
         print("Initial Backtest:")
         print(json.dumps(initial_result, indent=4))
 
@@ -270,7 +325,9 @@ class QPSO:
         # Initialize fitness ratio weights for exploration
         if self.options.fitness_ratios is None:
             self.options.fitness_ratios = {coord: 0 for coord in coords}
-            self.options.fitness_ratios[coords[0]] = 1  # Default to first metric if not set
+            self.options.fitness_ratios[
+                coords[0]
+            ] = 1  # Default to first metric if not set
 
         historical = []  # Stores improvement snapshots
         historical_tests = []  # Stores near-optimal attempts
@@ -282,7 +339,9 @@ class QPSO:
             qpso_start = time.time()
             while True:
                 if self.options.cooldown:
-                    time.sleep(self.options.cooldown)  # Optional delay to reduce CPU load
+                    time.sleep(
+                        self.options.cooldown
+                    )  # Optional delay to reduce CPU load
 
                 iteration += 1
                 idx += 1
@@ -293,7 +352,9 @@ class QPSO:
 
                 # Periodically invert fitness preferences (for diversity)
                 if not idx % self.options.fitness_period:
-                    self.options.fitness_ratios = self.options.fitness_inversion(self.options.fitness_ratios)
+                    self.options.fitness_ratios = self.options.fitness_inversion(
+                        self.options.fitness_ratios
+                    )
 
                 # Allow exploration in suboptimal directions
                 if iteration % self.options.digress_freq == 0:
@@ -306,7 +367,9 @@ class QPSO:
                     }
 
                 # Choose neurons to mutate
-                neurons = self.options.neurons if self.options.neurons else list(parameters)
+                neurons = self.options.neurons or [
+                    i for i in parameters if bot.clamps[i][3]
+                ]
                 for _ in range(3):
                     neurons = sample(population=neurons, k=randint(1, len(neurons)))
                 neurons.sort()
@@ -319,7 +382,11 @@ class QPSO:
                         neurons = choice(synapses)
 
                 # Limit memory size of synapses (synaptic pruning)
-                synapses = list(set(synapses))[-self.options.synapses:] if self.options.synapses else []
+                synapses = (
+                    list(set(synapses))[-self.options.synapses :]
+                    if self.options.synapses
+                    else []
+                )
 
                 # Select which coordinate to optimize
                 coord = choices(
@@ -327,25 +394,37 @@ class QPSO:
                     weights=list(self.options.fitness_ratios.values()),
                     k=1,
                 )[0]
-                bot = deepcopy(best_bots[coord][1])  # Start from best bot in selected coordinate
+                bot = deepcopy(
+                    best_bots[coord][1]
+                )  # Start from best bot in selected coordinate
 
                 # Mutate parameters using QPSO mechanisms
                 for neuron in neurons:
+                    if not bot.clamps[neuron][3]:
+                        continue
                     aegir, path = self.entheogen(
-                        iteration, parameters.index(neuron) / len(parameters)
+                        iteration,
+                        parameters.index(neuron) / len(parameters),
+                        bot.tune[neuron].shape
+                        if isinstance(bot.tune[neuron], np.ndarray)
+                        else 1,
+                        bot.clamps[neuron][0],  # min
+                        bot.clamps[neuron][2],  # max
+                        # is it a numpy array of ints?
+                        np.issubdtype(bot.tune[neuron].dtype, np.integer)
+                        # if it is a numpy array,
+                        if isinstance(bot.tune[neuron], np.ndarray)
+                        # else is it a single int?
+                        else isinstance(bot.tune[neuron], int),
                     )
-                    # Mutate float parameters with noise and scaling
-                    if isinstance(bot.tune[neuron], float):
-                        bot.tune[neuron] *= path
-                        bot.tune[neuron] += (random() - 0.5) / 1000
-                    # Mutate integer parameters with discrete steps
-                    elif isinstance(bot.tune[neuron], int):
-                        bot.tune[neuron] = int(bot.tune[neuron] + randint(-2, 2))
+                    bot.tune[neuron] += path
 
                 bot = bound_neurons(bot)  # Ensure parameter validity
 
                 # Evaluate new configuration
-                new_score = backtest(bot, self.data, self.wallet.copy(), plot=False, **kwargs)
+                new_score = backtest(
+                    bot, self.data, self.wallet.copy(), plot=False, **kwargs
+                )
 
                 boom = []
                 improved = False

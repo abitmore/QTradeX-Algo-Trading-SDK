@@ -5,7 +5,9 @@ from copy import deepcopy
 
 import matplotlib.pyplot as plt
 import matplotlib.style as mplstyle
+import numpy as np
 import qtradex as qx
+from qtradex.common.utilities import NdarrayEncoder
 
 mplstyle.use("dark_background")
 plt.rcParams["figure.raise_window"] = False
@@ -37,8 +39,44 @@ def bound_neurons(bot):
             ret = (value * (1 - strength)) + (maxv * strength)
         return int(ret) if isint else ret
 
+    def ndclamp(value, minv, maxv, strength):
+        """
+        Clamp `value` between `minv` and `maxv` with `strength`.
+        If strength is one, value is hard clipped.
+        If strength is 0.5, value is returned as the mean of itself and any boundaries it is outside of.
+        If strength is 0, it is returned as is.
+
+        This works for all values of strength between 0 and 1.
+        """
+        
+        # Create a mask for values less than minv
+        less_than_min = value < minv
+        # Create a mask for values greater than maxv
+        greater_than_max = value > maxv
+        
+        # Initialize the result with the original value
+        ret = np.copy(value)
+        
+        # Apply clamping for values less than minv
+        if np.any(less_than_min):
+            ret[less_than_min] = (value[less_than_min] * (1 - strength)) + (minv * strength)
+        
+        # Apply clamping for values greater than maxv
+        if np.any(greater_than_max):
+            ret[greater_than_max] = (value[greater_than_max] * (1 - strength)) + (maxv * strength)
+        
+        # Return as int if the original value was an integer
+        if np.issubdtype(value.dtype, np.integer):
+            return ret.astype(int)
+        
+        return ret
+
     bot.tune = {
-        key: clamp(bot.tune[key], minv, maxv, clamp_amt)
+        key: (
+            ndclamp(bot.tune[key], minv, maxv, clamp_amt)
+            if isinstance(bot.tune[key], np.ndarray)
+            else clamp(bot.tune[key], minv, maxv, clamp_amt)
+        )
         for key, (minv, _, maxv, clamp_amt) in bot.clamps.items()
     }
 
@@ -52,7 +90,7 @@ def print_tune(score, bot, render=False):
     for k, s in score.items():
         msg += f"# {k}".ljust(just + 2) + f" {s:.3f}\n"
 
-    msg += "self.tune = " + json.dumps(bot.tune, indent=4)
+    msg += "self.tune = " + json.dumps(bot.tune, indent=4, cls=NdarrayEncoder)
     msg += "\n\n"
     if not render:
         print(msg)
@@ -66,7 +104,7 @@ def end_optimization(best_bots, show):
         msg += "## " + name + "\n\n"
         msg += print_tune(score, bot, render=True)
         save_bot = deepcopy(bot)
-        save_bot.tune = {"tune":bot.tune.copy(), "results":score}
+        save_bot.tune = {"tune": bot.tune.copy(), "results": score}
         qx.core.tune_manager.save_tune(save_bot, name)
     if show:
         print(msg)
