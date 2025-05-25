@@ -6,7 +6,13 @@
 
 Welcome to **QTradeX**, a powerful and flexible Python framework for designing, backtesting, and deploying algorithmic trading bots. Built with cryptocurrency markets in mind, QTradeX provides high-level abstractions for trading strategies, technical indicators, data handling, and optimization, making it an ideal tool for both novice and experienced algo-traders.
 
-This repository contains the core QTradeX framework.  See the docs at [DeepWiki](https://deepwiki.com/squidKid-deluxe/QTradeX-Algo-Trading-SDK).
+This repository contains the core QTradeX framework.  
+
+Read the core docs at [QtradeX SDK DeepWiki](https://deepwiki.com/squidKid-deluxe/QTradeX-Algo-Trading-SDK).
+
+Read the bot docs at [QtradeX AI Agents DeepWiki](https://deepwiki.com/squidKid-deluxe/QTradeX-AI-Agents).
+
+Join the community on [QtradeX Telegram Group](https://t.me/qtradex_sdk). 
 
 For a collection of pre-built trading strategies, check out the companion repository: 
 
