@@ -120,9 +120,10 @@ qx.core.dispatch(bot, data, wallet)
 
 ## 🧭 Roadmap
 
-* 🔄 **Live Execution** via CCXT & Bitshares
 * 📈 More indicators (non-Tulip sources)
 * 🏦 TradFi Connectors: Stocks, Forex, and Comex support
+
+Want to help out?  Check out the [Issues](https://github.com/squidKid-deluxe/QTradeX-Algo-Trading-SDK/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22help%20wanted%22) list for forseeable improvements and bugs.
 
 ---
 
