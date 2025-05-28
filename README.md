@@ -153,4 +153,4 @@ Want to help out?  Check out the [Issues](https://github.com/squidKid-deluxe/QTr
 
 ---
 
-✨ Ready to start? Clone the repo, run your first bot, and let’s build the future of trading bots.
+✨ Ready to start? Clone the repo, run your first bot, and tune away.  Once tuned - LET THE EXECUTIONS BEGIN!
