@@ -74,36 +74,53 @@ pip install -e .
 
 ```python
 import qtradex as qx
-from qtradex.indicators import tulipy as tu
-from qtradex.private.signals import Buy, Sell, Thresholds
+import numpy as np
 
-class EMACrossBot(qx.core.BaseBot):
+
+class EMACrossBot(qx.BaseBot):
     def __init__(self):
         self.tune = {"fast_ema": 10, "slow_ema": 50}
-    
+
     def indicators(self, data):
         return {
-            "fast_ema": tu.ema(data["close"], self.tune["fast_ema"]),
-            "slow_ema": tu.ema(data["close"], self.tune["slow_ema"])
+            "fast_ema": qx.ti.ema(data["close"], self.tune["fast_ema"]),
+            "slow_ema": qx.ti.ema(data["close"], self.tune["slow_ema"]),
         }
-    
+
     def strategy(self, tick_info, indicators):
-        fast = indicators["fast_ema"][-1]
-        slow = indicators["slow_ema"][-1]
+        fast = indicators["fast_ema"]
+        slow = indicators["slow_ema"]
         if fast > slow:
-            return Buy()
+            return qx.Buy()
         elif fast < slow:
-            return Sell()
-        return Thresholds()
+            return qx.Sell()
+        return qx.Thresholds(buying=0.5 * fast, selling=2 * fast)
+
+    def plot(self, *args):
+        qx.plot(
+            self.info,
+            *args,
+            (
+                # key name    label    color   axis idx   axis name
+                ("fast_ema", "EMA 1", "white", 0,        "EMA Cross"),
+                ("slow_ema", "EMA 2", "cyan",  0,        "EMA Cross"),
+            )
+        )
+
 
 # Load data and run
-data = qx.public.Data(exchange="kucoin", asset="BTC", currency="USDT", begin="2023-01-01", end="2023-12-31")
-wallet = qx.private.PaperWallet({"BTC": 1, "USDT": 0})
+data = qx.Data(
+    exchange="kucoin",
+    asset="BTC",
+    currency="USDT",
+    begin="2020-01-01",
+    end="2023-01-01"
+)
 bot = EMACrossBot()
-qx.core.dispatch(bot, data, wallet)
+qx.dispatch(bot, data)
 ```
 
-🔗 See more bots in [QTradeX Algo Strategies](https://github.com/squidKid-deluxe/QTradeX-AI-Agents)
+🔗 See more bots in [QTradeX AI Agents](https://github.com/squidKid-deluxe/QTradeX-AI-Agents)
 
 ---
 
