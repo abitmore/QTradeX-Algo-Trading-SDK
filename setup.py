@@ -24,6 +24,8 @@ setup(
     license="MIT",
     packages=["qtradex"],  # Adjust if you have additional packages
     install_requires=[
+        "ccxt",
+        "jsonpickle",
         "Cython",
         "setuptools>64",
         "cachetools",
