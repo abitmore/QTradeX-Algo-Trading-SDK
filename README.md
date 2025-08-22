@@ -1,5 +1,16 @@
 # 🚀 QTradeX Core — Build, Backtest & Optimize AI-Powered Crypto Trading Bots
 
+<p>
+  <img src="https://img.shields.io/github/stars/squidKid-deluxe/QTradeX-Algo-Trading-SDK" />
+  <img src="https://img.shields.io/github/contributors/squidKid-deluxe/QTradeX-Algo-Trading-SDK" />
+  <img src="https://img.shields.io/github/last-commit/squidKid-deluxe/QTradeX-Algo-Trading-SDK" />
+  <img src="https://visitor-badge.laobi.icu/badge?page_id=squidKid-deluxe.QTradeX-Algo-Trading-SDK" />
+  <img src="https://img.shields.io/github/languages/count/squidKid-deluxe/QTradeX-Algo-Trading-SDK" />
+  <img src="https://img.shields.io/github/languages/top/squidKid-deluxe/QTradeX-Algo-Trading-SDK" />
+  <img src="https://img.shields.io/github/issues/squidKid-deluxe/QTradeX-Algo-Trading-SDK" />
+  <img src="https://img.shields.io/github/issues-pr/squidKid-deluxe/QTradeX-Algo-Trading-SDK" />
+</p>
+
 <p align="center">
   <img src="screenshots/Screenshot from 2025-05-02 18-50-54.png" width="100%" alt="QTradeX Demo Screenshot">
 </p>
@@ -13,6 +24,8 @@
 
 ## ⚡️ TL;DR
 **QTradeX** is a lightning-fast Python framework for designing, backtesting, and deploying algorithmic trading bots, built for **crypto markets** with support for **100+ exchanges**, **AI-driven optimization**, and **blazing-fast vectorized execution**.
+
+Like what we're doing?  Give us a ⭐!
 
 ---
 
