@@ -78,21 +78,7 @@ jobs:
       - name: Install build dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install build Cython "setuptools>80" setuptools-scm bump2version
-
-      - name: Configure Git
-        run: |
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-
-      - name: Bump version
-        run: |
-          # Bump the patch version (e.g., 1.0.0 -> 1.0.1)
-          bump2version patch --allow-dirty
-          git push origin main
-          git push origin --tags
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          pip install build Cython "setuptools>80"
 
       - name: Build source tarball and wheel
         run: python -m build --sdist --wheel --outdir dist/
