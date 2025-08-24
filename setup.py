@@ -13,7 +13,7 @@ cython_extensions = [
 setup(
     name="QTradeX",
     use_scm_version=True,
-    setup_requires=["setuptools_scm", "setuptools>80"],
+    setup_requires=["Cython", "setuptools_scm", "setuptools>80"],
     description="AI-powered SDK featuring algorithmic trading, backtesting, deployment on 100+ exchanges, and multiple optimization engines.",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
