@@ -19,7 +19,6 @@ jobs:
       - name: Get last successful commit
         id: get-last-commit
         run: |
-          # Try to get the last successful commit SHA from the artifact
           mkdir -p last-commit
           if gh run download -n last-commit-sha --dir last-commit; then
             LAST_COMMIT=$(cat last-commit/last-commit-sha.txt)
@@ -29,6 +28,8 @@ jobs:
             LAST_COMMIT=""
           fi
           echo "last_commit=$LAST_COMMIT" >> $GITHUB_ENV
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Check for changes
         id: check-changes
@@ -37,7 +38,6 @@ jobs:
             echo "No previous commit, assuming changes"
             echo "has_changes=true" >> $GITHUB_OUTPUT
           else
-            # Check if there are changes since the last commit
             git fetch origin
             CHANGES=$(git log $LAST_COMMIT..HEAD --oneline)
             if [ -n "$CHANGES" ]; then
@@ -60,9 +60,12 @@ jobs:
       url: https://pypi.org/project/QTradeX/
     permissions:
       id-token: write  # Mandatory for Trusted Publishing
+      contents: write  # Allow writing to repository for tag push
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for setuptools_scm
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -75,7 +78,21 @@ jobs:
       - name: Install build dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install build Cython "setuptools>80" setuptools-scm
+          pip install build Cython "setuptools>80" setuptools-scm bump2version
+
+      - name: Configure Git
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+
+      - name: Bump version
+        run: |
+          # Bump the patch version (e.g., 1.0.0 -> 1.0.1)
+          bump2version patch --allow-dirty
+          git push origin main
+          git push origin --tags
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build source tarball and wheel
         run: python -m build --sdist --wheel --outdir dist/
@@ -95,4 +112,4 @@ jobs:
         with:
           name: last-commit-sha
           path: last-commit/last-commit-sha.txt
-          retention-days: 7  # Keep artifact for one week
+          retention-days: 7
