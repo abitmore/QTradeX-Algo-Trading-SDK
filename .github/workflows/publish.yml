@@ -70,7 +70,7 @@ jobs:
           python-version: '3.9'
 
       - name: Install Python development headers
-        run: sudo apt-get update && sudo apt-get install -y python3.9-dev
+        run: sudo apt-get update && sudo apt-get install -y python3-dev
 
       - name: Install build dependencies
         run: |
