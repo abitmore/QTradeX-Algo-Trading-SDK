@@ -12,8 +12,9 @@ cython_extensions = [
 
 setup(
     name="QTradeX",
-    version="1.0",
-    description="",  # Add your description here
+    use_scm_version=True,
+    setup_requires=["setuptools_scm", "setuptools>80"],
+    description="AI-powered SDK featuring algorithmic trading, backtesting, deployment on 100+ exchanges, and multiple optimization engines.",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
     python_requires=">=3.9",
@@ -22,7 +23,7 @@ setup(
         "Operating System :: POSIX :: Linux",
     ],
     license="MIT",
-    packages=["qtradex"],  # Adjust if you have additional packages
+    packages=["qtradex"],
     install_requires=[
         "ccxt",
         "jsonpickle",
@@ -45,9 +46,9 @@ setup(
         ],
     },
     ext_modules=cythonize(cython_extensions),
-    url="https://github.com/",
+    url="https://github.com/squidKid-deluxe/QTradeX-Algo-Trading-SDK",
     project_urls={
-        "Homepage": "https://github.com/",
-        "Issues": "https://github.com/",
+        "Homepage": "https://github.com/squidKid-deluxe/QTradeX-Algo-Trading-SDK",
+        "Issues": "https://github.com/squidKid-deluxe/QTradeX-Algo-Trading-SDK/issues",
     },
 )
