@@ -8,6 +8,8 @@ on:
 jobs:
   check-changes:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       has_changes: ${{ steps.check-changes.outputs.has_changes }}
     steps:
