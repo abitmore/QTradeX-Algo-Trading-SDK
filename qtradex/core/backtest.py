@@ -303,6 +303,7 @@ def backtest(
     raw_states = states
     states = preprocess_states(states, (data.asset, data.currency))
     states["days"] = days
+    states["candle_size"] = candle_size
     states["begin"] = raw_states["unix"][0]
     states["end"] = raw_states["unix"][-1]
 
@@ -320,6 +321,11 @@ def backtest(
         ),
         **custom,
     }
+
+    # I don't care how good the results are, if you don't make at least some trades, you don't count
+    if len(raw_states["trades"]) < 10:
+        ret = {k:v - 10000 for k, v in ret.items()}
+
 
     # Plot results if requested
     if plot:

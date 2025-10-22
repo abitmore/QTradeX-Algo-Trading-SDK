@@ -15,7 +15,7 @@ cython_extensions = [
 
 setup(
     name="QTradeX",
-    version="1.1.0",
+    version="1.2.0",
     setup_requires=["Cython>=0.29.21", "setuptools>=80"],
     description="AI-powered SDK featuring algorithmic trading, backtesting, deployment on 100+ exchanges, and multiple optimization engines.",
     long_description=open("README.md", encoding="utf-8").read(),
@@ -26,7 +26,7 @@ setup(
         "Operating System :: POSIX :: Linux",
     ],
     license="MIT",
-    packages=["qtradex"],
+    packages=find_packages(),
     install_requires=[
         "ccxt",
         "jsonpickle",
@@ -36,7 +36,7 @@ setup(
         "tulipy",
         "finance-datareader",
         "bitshares-signing",
-        "numpy",
+        "numpy<2",
         "matplotlib",
         "scipy",
         "ttkbootstrap",

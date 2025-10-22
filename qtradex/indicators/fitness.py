@@ -46,20 +46,23 @@ def roi_currency(balances, prices, pair):
     # add one because we want "X" i.e. 1 is break even 2 is 100% gain
     return ((final_balance - initial_balance) / initial_balance) + 1
 
-    end_max_assets = assets + (currency / close)
-    end_max_currency = currency + (assets * close)
-    roi_assets = end_max_assets / storage["begin_max_assets"]
-    roi_currency = end_max_currency / storage["begin_max_currency"]
+
+def roi_static(balances, prices, pair):
+    return (
+        roi_assets([balances[0], balances[0]], prices, pair)
+        * roi_currency([balances[0], balances[0]], prices, pair)
+    ) ** 0.5
 
 
-def roi_gross(balances, prices, pair, fee=0):
+def roi_gross(balances, prices, pair, percent_cheats):
     """
     # Calculate the geometric mean of the return on investment
     sqrt(roi_assets*roi_currency)
     """
     return (
-        roi_assets(balances, prices, pair) * roi_currency(balances, prices, pair)
-    ) ** 0.5
+        ((roi_assets(balances, prices, pair) * roi_currency(balances, prices, pair)) ** 0.5)
+        / roi_static(balances, prices, pair)
+    ) * (1 + (percent_cheats / 100))
 
 
 def cagr(balances, unix_timestamps):
@@ -108,9 +111,7 @@ def sortino_ratio(roi, losses=[], risk_free_rate=1.05):
     Returns:
     float: The Sortino Ratio.
     """
-    downside_deviation = (
-        np.std(functools.reduce(lambda x, y: x * y, losses)) if losses else 1
-    )
+    downside_deviation = np.std(functools.reduce(lambda x, y: x * y, losses)) if losses else 1
 
     if downside_deviation == 0:
         downside_deviation = 1
@@ -291,9 +292,7 @@ def efficiency_ratio(roi, wins, losses):
     float: The Efficiency Ratio.
     """
     mean_return = roi
-    mean_absolute_deviation = np.mean(
-        np.abs(wins + losses)
-    )  # Mean of absolute deviations
+    mean_absolute_deviation = np.mean(np.abs(wins + losses))  # Mean of absolute deviations
     return mean_return / mean_absolute_deviation if mean_absolute_deviation != 0 else 0
 
 
@@ -338,47 +337,66 @@ def hurst_exponent(trades):
 
 def days_per_trade(states, target, roi):
     trades = states["detailed_trades"]
-    days = states["days"]
     begin = states["begin"]
     end = states["end"]
     if len(trades) < 2:
         return float("-inf")
 
-    if days / len(trades) == target:
-        return 1
-
     elapseds = [
-        (t1 - t2) / 86400 for t2, t1 in itertools.pairwise([begin, *[i["unix"] for i in trades], end])
+        (t1 - t2) / 86400
+        for t2, t1 in itertools.pairwise([begin, *[i["unix"] for i in trades], end])
     ]
     raw_dpt = sorted(elapseds)[(len(trades) - 1) // 2]
 
     # raw_dpt = (days / len(trades))
-    ret = (
-        - abs(target - raw_dpt)
-        - abs(target - min(elapseds))
-        - abs(target - max(elapseds))
-    )
+    ret = -abs(target - raw_dpt) - abs(target - min(elapseds)) - abs(target - max(elapseds))
 
     return ret / roi
+
+
+def percent_cheats(states):
+    trades = states["detailed_trades"]
+    begin = states["begin"]
+    end = states["end"]
+    elapseds = [
+        (t1 - t2) for t2, t1 in itertools.pairwise([begin, *[i["unix"] for i in trades], end])
+    ]
+
+    return ((
+        sum([1 if elap < states["candle_size"] * 3 else 0 for elap in elapseds]) / len(trades)
+    ) * -100) if trades else 0
+
+
+def close_to(array, lower_bound, upper_bound):
+    # Initialize a score array
+    scores = np.zeros(array.shape)
+
+    # Calculate individual scores
+    scores[array < lower_bound] = lower_bound - array[array < lower_bound]
+    scores[array > upper_bound] = array[array > upper_bound] - upper_bound
+    # Calculate overall score (sum of individual scores)
+    overall_score = -np.mean(scores)
+    return overall_score
 
 
 def fitness(keys, states, raw_states, asset, currency):
     # Initialize a dictionary to hold the results
     results = {}
-    roi_fee = 0
-    if any(fee_idx := [key.startswith("roi_fee_") for key in keys]):
-        roi_fee = float(keys[fee_idx.index(True)].rsplit("_", 1)[1])
+    keys.append("roi")
+
     target_dpt = 0
     if any(target := [key.startswith("dpt_") for key in keys]):
         target_dpt = float(keys[target.index(True)].rsplit("_", 1)[1])
+        keys.pop(target.index(True))
         keys.append("dpt")
 
     # Define a mapping of keys to their corresponding functions and parameters
     # fmt: off
     calculations = {
+        "percent_cheats": (percent_cheats, (states,)),
         "roi_assets": (roi_assets, (raw_states["balances"], raw_states["close"], (asset, currency))),
         "roi_currency": (roi_currency, (raw_states["balances"], raw_states["close"], (asset, currency))),
-        "roi": (roi_gross, (raw_states["balances"], raw_states["close"], (asset, currency), roi_fee)),
+        "roi": (roi_gross, (raw_states["balances"], raw_states["close"], (asset, currency), None)),
         "cagr": (cagr, (states["balance_values"], raw_states["unix"])),
         "sharpe_ratio": (sharpe_ratio, (None, states["wins"], states["losses"])),
         "sortino_ratio": (sortino_ratio, (None, states["losses"])),
@@ -396,13 +414,16 @@ def fitness(keys, states, raw_states, asset, currency):
         "efficiency_ratio": (efficiency_ratio, (None, states["wins"], states["losses"])),
         "drawdown_duration": (drawdown_duration, (states["detailed_trades"],)),
         "hurst_exponent": (hurst_exponent, (states["trades"],)),
-        "dpt": (days_per_trade, (states, target_dpt, None))
+        "dpt": (days_per_trade, (states, target_dpt, None)),
     }
     # fmt: on
 
+    added = []
+
     # Ensure dependencies are calculated
     for key in keys:
-        keys = {
+        added.extend({
+            "roi": ["percent_cheats"],
             "sharpe_ratio": ["roi"],
             "sortino_ratio": ["roi"],
             "calmar_ratio": ["cagr", "maximum_drawdown"],
@@ -410,16 +431,22 @@ def fitness(keys, states, raw_states, asset, currency):
             "info_ratio": ["roi", "alpha"],
             "efficiency_ratio": ["roi"],
             "dpt": ["roi"],
-        }.get(key, []) + keys
+        }.get(key, []))
+
+    added = [i for i in added if i not in keys]
+
+    keys.extend(added)
+    keys = list(set(keys))
 
     # and ensure they are calculated first
     keys.sort(
         key=lambda x: {
-            "roi": 0,
-            "cagr": 1,
-            "maximum_drawdown": 2,
-            "beta": 3,
-            "alpha": 4,
+            "percent_cheats": 0,
+            "roi": 1,
+            "cagr": 2,
+            "maximum_drawdown": 3,
+            "beta": 4,
+            "alpha": 5,
         }.get(x, float("inf"))
     )
     # Calculate the values based on the keys provided
@@ -427,7 +454,14 @@ def fitness(keys, states, raw_states, asset, currency):
         if key in keys:
             # Handle cases where some parameters depend on previous calculations
             # the order of keys ensures they already exist
-            if key == "sharpe_ratio":
+            if key == "roi":
+                params = (
+                    raw_states["balances"],
+                    raw_states["close"],
+                    (asset, currency),
+                    results["percent_cheats"],
+                )
+            elif key == "sharpe_ratio":
                 params = (results["roi"], states["wins"], states["losses"])
             elif key == "sortino_ratio":
                 params = (results["roi"], states["losses"])
@@ -440,9 +474,7 @@ def fitness(keys, states, raw_states, asset, currency):
                     results["roi"],
                     results["alpha"],
                     results["beta"],
-                    np.std(
-                        np.subtract(states["balance_values"], states["hold_states"])
-                    ),
+                    np.std(np.subtract(states["balance_values"], states["hold_states"])),
                 )
             elif key == "efficiency_ratio":
                 params = (results["roi"], states["wins"], states["losses"])
@@ -455,5 +487,18 @@ def fitness(keys, states, raw_states, asset, currency):
 
             # Call the function and store the result
             results[key] = func(*params)
+
+    for key in keys:
+        if key.startswith("ind:"):
+            name = key.split("ind:", 1)[1].rsplit(":", 1)[0]
+            intended_range = [
+                float(i) for i in key.split("ind:", 1)[1].rsplit(":", 1)[1].split("~")
+            ]
+            results["ind:" + name] = (
+                close_to(raw_states["indicator_states"][name].flatten(), *intended_range)
+                / results["roi"]
+            )
+
+    results = {k:v for k, v in results.items() if k not in added}
 
     return results

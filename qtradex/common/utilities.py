@@ -32,6 +32,7 @@ from json import dumps as json_dumps
 from json import loads as json_loads
 from math import ceil, floor, log10
 from threading import Thread
+import re
 
 import numpy as np
 import tulipy as tu
@@ -39,9 +40,29 @@ import tulipy as tu
 PATH = str(os.path.dirname(os.path.abspath(__file__))) + "/"
 NIL = 10e-10
 
-
 # FORMATTING
 # ======================================================================
+def red_to_green_fade(value):
+    try:
+        # Calculate the red and green components
+        red = 255 - value  # Red decreases from 255 to 0
+        green = value      # Green increases from 0 to 255
+
+        # Construct the xterm256 color code
+        color_code = 16 + (red // 51) * 36 + (green // 51) * 6
+        return f"\033[38;5;{int(color_code)}m"
+    except:
+        return ""
+
+def strip_ansi(string):
+    return re.sub(r"\033\[.*?m", "", string)
+
+def ljust_ansi(string, length):
+    spaces = length - len(strip_ansi(string))
+    if spaces > 0:
+        string += " "*spaces
+    return string
+
 def print_table(data, x_pos=-1, y_pos=0, render=False, colors=None, pallete=None):
     """
     Prints a formatted table based on the provided data.
@@ -64,12 +85,20 @@ def print_table(data, x_pos=-1, y_pos=0, render=False, colors=None, pallete=None
     for cdx, column in enumerate(data):
         for celldx, cell in enumerate(column):
             if isinstance(cell, np.ndarray):
-                column[
-                    celldx
-                ] = f"<ndarray of {functools.reduce(lambda x,y:x*y, cell.shape)} items>"
+                items = functools.reduce(lambda x,y:x*y, cell.shape)
+                if len(cell.shape) > 1 or items > 20:
+                    column[
+                        celldx
+                    ] = f"<{len(cell.shape)}D array of {items} items>"
+                else:
+                    processed_cell = cell - np.min(cell)
+                    processed_cell /= np.max(processed_cell)
+                    column[
+                        celldx
+                    ] = "".join(f"{red_to_green_fade(value)}█\033[m" for value in np.clip(processed_cell*255, 0, 255))
         justs.append(
             max(
-                len(str(sigfig(cell, 4) if isinstance(cell, float) else cell))
+                len(str(sigfig(cell, 4) if isinstance(cell, float) else strip_ansi(str(cell))))
                 for cell in column
             )
             + 2
@@ -81,14 +110,14 @@ def print_table(data, x_pos=-1, y_pos=0, render=False, colors=None, pallete=None
     for idx, row in enumerate(data2):
         sub = 0
         for cdx, cell in enumerate(row):
-            if (x := len(str(cell)) - justs[cdx]) > 0:
+            if (x := len(strip_ansi(str(cell))) - justs[cdx]) > 0:
                 sub = x
             if (x := justs[cdx] - sub) < 0:
                 sub = x
             if colors is not None and int(colors[idx][cdx]):
-                text += f"\033[38;5;{pallete[int(colors[idx][cdx])]}m{str(cell).ljust(justs[cdx] - sub)}\033[m"
+                text += f"\033[38;5;{pallete[int(colors[idx][cdx])]}m{ljust_ansi(str(cell), justs[cdx] - sub)}\033[m"
             else:
-                text += str(cell).ljust(justs[cdx] - sub)
+                text += ljust_ansi(str(cell), justs[cdx] - sub)
         text += "\n" if x_pos < 0 else f"\033[{1+idx+y_pos};{x_pos+1}H"
     if not render:
         print(text)

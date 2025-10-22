@@ -1,3 +1,4 @@
+from traceback import print_exc
 import importlib.util
 import inspect
 import os
@@ -42,6 +43,8 @@ def auto_backtest(bot, data, wallet=None, **kwargs):
     botscript = inspect.getfile(type(bot))
     contents = read_file(botscript)
     # store the tune
+    orig_tune = bot.tune.copy()
+    bot = reload_bot(botscript, botclass)()
     tune = bot.tune.copy()
 
     # Show an initial backtest
@@ -52,11 +55,16 @@ def auto_backtest(bot, data, wallet=None, **kwargs):
         # if the botscript changed
         # TODO: Ideally this is done with AST so that comments and whitespace don't trigger a plot
         if new_contents != contents:
-            # then we need to update the plot
-            bot = reload_bot(botscript, botclass)()
-            bot.tune.update(tune)
-            plt.clf()
-            backtest(bot, data, wallet, **kwargs, block=False, plot=True)
+            try:
+                # then we need to update the plot
+                bot = reload_bot(botscript, botclass)()
+                if not (str(bot.tune) != str(orig_tune) and str(bot.tune) != str(tune)):
+                    bot.tune.update(orig_tune)
+                plt.clf()
+                plt.cla()
+                backtest(bot, data, wallet, **kwargs, block=False, plot=True)
+            except:
+                print_exc()
             contents = new_contents
 
         plt.pause(1)

@@ -82,7 +82,7 @@ def plot(
     """
     mplstyle.use(style)
 
-    n_levels = max(i[3] for i in indicator_fmt) + 2
+    n_levels = (max(i[3] for i in indicator_fmt) if indicator_fmt else 0) + 2
     # clear the current figure
     plt.clf()
     fig = plt.gcf()
@@ -92,7 +92,7 @@ def plot(
     axes = [fig.add_subplot(i) for i in gs]
 
     title = [i[4] for i in indicator_fmt if not i[3]]
-    if title:
+    if title and title[-1] is not None:
         title = title[-1]
     else:
         title = (os.path.split(sys.argv[0])[1]

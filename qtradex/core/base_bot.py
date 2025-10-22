@@ -19,10 +19,17 @@ class BaseBot:
         raise NotImplementedError
 
     def plot(self, data, states, indicators, block):
-        raise NotImplementedError
+        axes = qx.plot(
+            self.info,
+            data,
+            states,
+            indicators,
+            block,
+            tuple(),
+        )
 
     def strategy(self, state, indicators):
-        raise NotImplementedError
+        return None
 
     def reset(self):
         """
@@ -35,7 +42,7 @@ class BaseBot:
         return signal
 
     def fitness(self, states, raw_states, asset, currency):
-        return ["roi"], {}
+        return ["roi", "cagr", "trade_win_rate"], {}
 
 
 class Info(dict):
