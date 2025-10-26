@@ -45,12 +45,17 @@ def float_period(func, args, indices):
         else:
             calls[idx].append(arg)  # Keep original value for non-adjusted indices
 
-    # Prepare to call the function with the appropriate number of arguments
-    results = []
-    for i in range(len(calls[0])):  # Iterate over the number of calls (floor/ceil)
-        call_args = [calls[j][i] for j in range(len(calls))]  # Gather arguments for this call
-        result = func(*call_args)
-        results.append(result)
+    try:
+        # Prepare to call the function with the appropriate number of arguments
+        results = []
+        for i in range(len(calls[0])):  # Iterate over the number of calls (floor/ceil)
+            call_args = [calls[j][i] for j in range(len(calls))]  # Gather arguments for this call
+            result = func(*call_args)
+            results.append(result)
+    except:
+        if "call_args" in locals():
+            print(call_args)
+        raise
 
     # Ensure we have the correct number of results and perform the weighted combination
     if len(results) == 1:

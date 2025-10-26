@@ -219,6 +219,7 @@ class LSGA(QPSO):
         improvements = 0
         iteration = 0  # Tracks iterations during optimization
         idx = 0  # Index for fitness evaluation
+        last_improvement = 0
         n_backtests = 1
         synapses = []  # Tracks past neuron connections
 
@@ -269,7 +270,8 @@ class LSGA(QPSO):
                     idx += 1
 
                     # Periodically adjust fitness ratios using user-defined function
-                    if not idx % self.options.fitness_period:
+                    # But if we're on a roll (constantly improving) then hang on, this is going well
+                    if not (idx - last_improvement) % self.options.fitness_period:
                         self.options.fitness_ratios = self.options.fitness_inversion(
                             self.options.fitness_ratios
                         )
@@ -374,6 +376,8 @@ class LSGA(QPSO):
                                 best_bots[coord] = (new_score, bot)
                                 boom.append(coord)
                                 improved = True
+                                improvements += 1
+                                last_improvement = idx
 
                     # Print relevant information and results if enabled
                     if self.options.show_terminal:

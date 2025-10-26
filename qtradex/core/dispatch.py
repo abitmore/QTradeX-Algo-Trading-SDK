@@ -75,6 +75,10 @@ def dispatch(bot, data, wallet=None, **kwargs):
     if choice == 0:
         qx.core.backtest(bot, data, wallet, **kwargs)
     elif choice == 1:
+        for k, v in bot.clamps.items():
+            if len(v) == 2:
+                bot.clamps[k] = (v[0], (v[0]+v[1]) / 2, v[1], 1)
+
         options = [
             "QPSO (Quantum Particle Swarm Optimizer)",
             "LSGA (Local Search Genetic Algorithm)",

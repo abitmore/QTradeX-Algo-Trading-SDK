@@ -2,8 +2,8 @@
 dist/
 build/
 QTradeX.egg-info/
-qtradex/indicators/utilities.c
-qtradex/indicators/qi.c
+qtradex/indicators/utilities.c*
+qtradex/indicators/qi.c*
 
 # candle cache
 qtradex/common/pipe/

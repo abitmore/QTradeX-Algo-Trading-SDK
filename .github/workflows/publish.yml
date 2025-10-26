@@ -1,97 +1,127 @@
-name: Weekly Python Package Publish to PyPI
+# This workflow will upload a Python Package to PyPI when a release is created
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python#publishing-to-package-registries
+
+# This workflow uses actions that are not certified by GitHub.
+# They are provided by a third-party and are governed by
+# separate terms of service, privacy policy, and support
+# documentation.
+
+name: Upload Python Package
 
 on:
-  schedule:
-    - cron: '0 0 * * 1'  # Run every Monday at midnight UTC
-  workflow_dispatch:  # Allow manual triggering for testing
+  release:
+    types: [published]
+
+permissions:
+  contents: read
 
 jobs:
-  check-changes:
+  release-build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    outputs:
-      has_changes: ${{ steps.check-changes.outputs.has_changes }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # Fetch all history for accurate diff
 
-      - name: Get last successful commit
-        id: get-last-commit
-        run: |
-          mkdir -p last-commit
-          if gh run download -n last-commit-sha --dir last-commit; then
-            LAST_COMMIT=$(cat last-commit/last-commit-sha.txt)
-            echo "Last successful commit: $LAST_COMMIT"
-          else
-            echo "No previous successful commit found, assuming changes exist"
-            LAST_COMMIT=""
-          fi
-          echo "last_commit=$LAST_COMMIT" >> $GITHUB_ENV
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Check for changes
-        id: check-changes
-        run: |
-          if [ -z "$LAST_COMMIT" ]; then
-            echo "No previous commit, assuming changes"
-            echo "has_changes=true" >> $GITHUB_OUTPUT
-          else
-            git fetch origin
-            CHANGES=$(git log $LAST_COMMIT..HEAD --oneline)
-            if [ -n "$CHANGES" ]; then
-              echo "Changes detected since $LAST_COMMIT"
-              echo "has_changes=true" >> $GITHUB_OUTPUT
-            else
-              echo "No changes detected since $LAST_COMMIT"
-              echo "has_changes=false" >> $GITHUB_OUTPUT
-            fi
-          fi
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  build-and-publish:
-    needs: check-changes
-    if: needs.check-changes.outputs.has_changes == 'true'
-    runs-on: ubuntu-latest
-    environment:
-      name: pypi
-    permissions:
-      id-token: write
-      contents: write
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
         with:
-          fetch-depth: 0
-      - name: Set up Python for tooling
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.9'
-      - name: Install build tools
-        run: python -m pip install --upgrade pip build cibuildwheel==2.15.0
-      - name: Build wheels with cibuildwheel
+          python-version: "3.x"
+
+      - name: Set project version from release title
+        # Use the release title as the version string (writes to setup.py)
         env:
-          CIBW_PLATFORM: linux
-          CIBW_BUILD: cp39-manylinux_x86_64
-        run: python -m cibuildwheel --output-dir dist
-      - name: Build sdist
-        run: python -m build --sdist --outdir dist
-      - name: Publish package distributions to PyPI
+          VERSION: ${{ github.event.release.name }}
+        run: |
+          python - <<'PY'
+          import os, re, sys
+          v = os.environ.get("VERSION","").strip()
+          if not v:
+              print("ERROR: release name is empty; cannot set version.")
+              sys.exit(1)
+          # Basic escaping for double quotes to avoid breaking string literal
+          v_escaped = v.replace('"', '\\"')
+          path = "setup.py"
+          try:
+              s = open(path, "r", encoding="utf-8").read()
+          except FileNotFoundError:
+              print(f"ERROR: {path} not found.")
+              sys.exit(1)
+          # If a version=... argument already exists, try to replace the line (prefer the one inside setup())
+          # First try to replace version= inside the setup(...) call:
+          def replace_in_setup(text, new_version):
+              # Find the setup( ... ) call start
+              m = re.search(r'\bsetup\s*\(\s*', text)
+              if not m:
+                  return None
+              start = m.end()
+              # Find where the setup(...) block ends by naive parenthesis matching
+              idx = start
+              depth = 1
+              while idx < len(text):
+                  c = text[idx]
+                  if c == '(':
+                      depth += 1
+                  elif c == ')':
+                      depth -= 1
+                      if depth == 0:
+                          end = idx
+                          break
+                  idx += 1
+              else:
+                  return None
+              setup_block = text[start:end]
+              # If version= exists in block, replace the first occurrence of version=... (single line)
+              if re.search(r'\bversion\s*=', setup_block):
+                  setup_block_new = re.sub(r'(^\s*version\s*=\s*([^\n,)]*)(,?)\s*)', f'    version="{new_version}",\n', setup_block, flags=re.M)
+                  return text[:start] + setup_block_new + text[end:]
+              else:
+                  # Insert version as the first argument inside setup(...)
+                  return text[:start] + f'\n    version="{new_version}",' + text[start:]
+          new_s = replace_in_setup(s, v_escaped)
+          if new_s is None:
+              # fallback: if no setup() found, look for any top-level version= assignment and replace; otherwise prepend a version variable comment
+              if re.search(r'^\s*version\s*=', s, flags=re.M):
+                  new_s = re.sub(r'^\s*version\s*=.*$', f'version = "{v_escaped}"', s, flags=re.M)
+              else:
+                  print("WARNING: setup(...) call not found; prepending version variable at top of file")
+                  new_s = f'version = "{v_escaped}"\n' + s
+          open(path, "w", encoding="utf-8").write(new_s)
+          print("Set setup.py version to:", v)
+          PY
+
+      - name: Build release distributions
+        run: |
+          # NOTE: put your own distribution build steps here.
+          python -m pip install build
+          python -m build
+
+      - name: Upload distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-dists
+          path: dist/
+
+  pypi-publish:
+    runs-on: ubuntu-latest
+    needs:
+      - release-build
+    permissions:
+      # IMPORTANT: this permission is mandatory for trusted publishing
+      id-token: write
+
+    # Dedicated environments with protections for publishing are strongly recommended.
+    # For more information, see: https://docs.github.com/en/actions/deployment/targeting-different-environments/using-environments-for-deployment#deployment-protection-rules
+    environment:
+      name: pypi
+      url: https://pypi.org/project/QTradeX/${{ github.event.release.name }}
+
+    steps:
+      - name: Retrieve release distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: release-dists
+          path: dist/
+
+      - name: Publish release distributions to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          user: __token__
-          password: ${{ secrets.PYPI_API_TOKEN }}
-      - name: Save current commit SHA
-        if: success()
-        run: |
-          mkdir -p last-commit
-          echo ${{ github.sha }} > last-commit/last-commit-sha.txt
-      - uses: actions/upload-artifact@v4
-        if: success()
-        with:
-          name: last-commit-sha
-          path: last-commit/last-commit-sha.txt
-          retention-days: 7
+          packages-dir: dist/

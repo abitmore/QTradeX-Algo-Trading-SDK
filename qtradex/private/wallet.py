@@ -3,11 +3,13 @@ from copy import deepcopy
 import ccxt
 
 
+BASE_FEE = 1 # in percent
+
 class WalletBase:
     def __init__(self):
         self.balances = {}
         self._readonly = True
-        self.fee = 0.25
+        self.fee = BASE_FEE
 
     def __repr__(self):
         return f"{type(self)}{self.balances}"
@@ -54,7 +56,7 @@ class WalletBase:
 
 
 class PaperWallet(WalletBase):
-    def __init__(self, balances=None, fee=0.25):
+    def __init__(self, balances=None, fee=BASE_FEE):
         super().__init__()
         self.balances = balances if balances is not None else {}
         self._readonly = False
