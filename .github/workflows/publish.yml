@@ -18,16 +18,10 @@ permissions:
 jobs:
   release-build:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.x"
-
       - name: Set project version from release title
-        # Use the release title as the version string (writes to setup.py)
         env:
           VERSION: ${{ github.event.release.name }}
         run: |
@@ -37,7 +31,6 @@ jobs:
           if not v:
               print("ERROR: release name is empty; cannot set version.")
               sys.exit(1)
-          # Basic escaping for double quotes to avoid breaking string literal
           v_escaped = v.replace('"', '\\"')
           path = "setup.py"
           try:
@@ -45,21 +38,15 @@ jobs:
           except FileNotFoundError:
               print(f"ERROR: {path} not found.")
               sys.exit(1)
-          # If a version=... argument already exists, try to replace the line (prefer the one inside setup())
-          # First try to replace version= inside the setup(...) call:
           def replace_in_setup(text, new_version):
-              # Find the setup( ... ) call start
               m = re.search(r'\bsetup\s*\(\s*', text)
               if not m:
                   return None
               start = m.end()
-              # Find where the setup(...) block ends by naive parenthesis matching
-              idx = start
-              depth = 1
+              idx, depth = start, 1
               while idx < len(text):
                   c = text[idx]
-                  if c == '(':
-                      depth += 1
+                  if c == '(': depth += 1
                   elif c == ')':
                       depth -= 1
                       if depth == 0:
@@ -69,30 +56,29 @@ jobs:
               else:
                   return None
               setup_block = text[start:end]
-              # If version= exists in block, replace the first occurrence of version=... (single line)
               if re.search(r'\bversion\s*=', setup_block):
                   setup_block_new = re.sub(r'(^\s*version\s*=\s*([^\n,)]*)(,?)\s*)', f'    version="{new_version}",\n', setup_block, flags=re.M)
                   return text[:start] + setup_block_new + text[end:]
               else:
-                  # Insert version as the first argument inside setup(...)
                   return text[:start] + f'\n    version="{new_version}",' + text[start:]
           new_s = replace_in_setup(s, v_escaped)
           if new_s is None:
-              # fallback: if no setup() found, look for any top-level version= assignment and replace; otherwise prepend a version variable comment
               if re.search(r'^\s*version\s*=', s, flags=re.M):
                   new_s = re.sub(r'^\s*version\s*=.*$', f'version = "{v_escaped}"', s, flags=re.M)
               else:
-                  print("WARNING: setup(...) call not found; prepending version variable at top of file")
                   new_s = f'version = "{v_escaped}"\n' + s
           open(path, "w", encoding="utf-8").write(new_s)
           print("Set setup.py version to:", v)
           PY
 
-      - name: Build release distributions
-        run: |
-          # NOTE: put your own distribution build steps here.
-          python -m pip install build
-          python -m build
+      - name: Build wheels with cibuildwheel
+        uses: pypa/cibuildwheel@v2.20.0  # or latest
+        env:
+          CIBW_BUILD: cp39-* cp310-* cp311-* cp312-* cp313-*  # include 3.13
+          CIBW_ARCHS_LINUX: x86_64
+          CIBW_SKIP: "*-win32 *-musllinux_*"  # optional: skip unsupported
+        with:
+          output-dir: dist/
 
       - name: Upload distributions
         uses: actions/upload-artifact@v4
