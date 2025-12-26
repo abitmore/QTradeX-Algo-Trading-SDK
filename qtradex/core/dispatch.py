@@ -83,6 +83,7 @@ def dispatch(bot, data, wallet=None, **kwargs):
             "QPSO (Quantum Particle Swarm Optimizer)",
             "LSGA (Local Search Genetic Algorithm)",
             "IPSE (Iterative Parametric Space Expansion)",
+            "AION (Adaptive Intelligent Optimization Network)",
             "Manual Tuner",
             "Gravitas",
         ]
@@ -95,8 +96,10 @@ def dispatch(bot, data, wallet=None, **kwargs):
         elif choice == 2:
             optimizer = qx.optimizers.IPSE(data, wallet)
         elif choice == 3:
+            optimizer = qx.optimizers.AION(data, wallet)
+        elif choice == 4:
             optimizer = qx.optimizers.MouseWheelTuner(data, wallet)
-        elif choice == 4: 
+        elif choice == 5:
             plot_gravitas(bot, data, wallet, **kwargs)
         if choice != 4:
             optimizer.optimize(bot, **kwargs)
