@@ -39,7 +39,7 @@ jobs:
             exit 1
           fi
           echo "Setting pyproject.toml version to: $v"
-          python - <<'PY'
+          python - "$v" <<'PY'
           import sys
           v = sys.argv[1]
           p = "pyproject.toml"
