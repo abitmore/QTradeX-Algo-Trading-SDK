@@ -64,14 +64,8 @@ jobs:
           PY
           echo "pyproject.toml updated"
 
-      - name: Build wheels with cibuildwheel
-        uses: pypa/cibuildwheel@v2.20.0
-        env:
-          CIBW_BUILD: cp39-* cp310-* cp311-* cp312-* cp313-*   # adjust as needed
-          CIBW_ARCHS_LINUX: x86_64
-          CIBW_SKIP: "*-win32 *-musllinux_*"
-        with:
-          output-dir: dist/
+      - name: Build wheel
+        run: python -m build --wheel --outdir dist
 
       - name: Upload distributions
         uses: actions/upload-artifact@v4
