@@ -21,7 +21,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install build tools
-        run: python -m pip install --upgrade pip setuptools wheel cibuildwheel==2.20.0
+        run: python -m pip install --upgrade pip setuptools wheel build
 
       - name: Set pyproject.toml version from release tag
         if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'release'
