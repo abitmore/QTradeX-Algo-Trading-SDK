@@ -40,28 +40,28 @@ jobs:
           fi
           echo "Setting pyproject.toml version to: $v"
           python - <<'PY'
-import sys
-v = sys.argv[1]
-p = "pyproject.toml"
-out = []
-in_project = False
-replaced = False
-with open(p, "r", encoding="utf-8") as f:
-    for line in f:
-        stripped = line.strip()
-        if stripped.startswith("["):
-            in_project = (stripped == "[project]")
-            out.append(line)
-            continue
-        if in_project and (not replaced) and stripped.startswith("version"):
-            out.append(f'version = "{v}"\n')
-            replaced = True
-            # keep in_project=False if you only want to replace the first version entry
-        else:
-            out.append(line)
-with open(p, "w", encoding="utf-8") as f:
-    f.writelines(out)
-PY
+          import sys
+          v = sys.argv[1]
+          p = "pyproject.toml"
+          out = []
+          in_project = False
+          replaced = False
+          with open(p, "r", encoding="utf-8") as f:
+              for line in f:
+                  stripped = line.strip()
+                  if stripped.startswith("["):
+                      in_project = (stripped == "[project]")
+                      out.append(line)
+                      continue
+                  if in_project and (not replaced) and stripped.startswith("version"):
+                      out.append(f'version = "{v}"\n')
+                      replaced = True
+                      # keep in_project=False if you only want to replace the first version entry
+                  else:
+                      out.append(line)
+          with open(p, "w", encoding="utf-8") as f:
+              f.writelines(out)
+          PY
           echo "pyproject.toml updated"
 
       - name: Build wheels with cibuildwheel
