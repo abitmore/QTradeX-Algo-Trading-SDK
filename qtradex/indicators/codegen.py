@@ -5,8 +5,8 @@ import re
 MODULES = ["tulipy"]
 
 SUB = """
-@cache
 @float_period{periods}
+@cache
 def {name}(*args, **kwargs):
     return tulipy.{name}(*args, **kwargs)
 """

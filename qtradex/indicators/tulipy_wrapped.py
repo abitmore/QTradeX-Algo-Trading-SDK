@@ -22,20 +22,20 @@ def add(*args, **kwargs):
     return tulipy.add(*args, **kwargs)
 
 
-@cache
 @float_period(4, 5)
+@cache
 def adosc(*args, **kwargs):
     return tulipy.adosc(*args, **kwargs)
 
 
-@cache
 @float_period(3,)
+@cache
 def adx(*args, **kwargs):
     return tulipy.adx(*args, **kwargs)
 
 
-@cache
 @float_period(3,)
+@cache
 def adxr(*args, **kwargs):
     return tulipy.adxr(*args, **kwargs)
 
@@ -45,20 +45,20 @@ def ao(*args, **kwargs):
     return tulipy.ao(*args, **kwargs)
 
 
-@cache
 @float_period(1, 2)
+@cache
 def apo(*args, **kwargs):
     return tulipy.apo(*args, **kwargs)
 
 
-@cache
 @float_period(2,)
+@cache
 def aroon(*args, **kwargs):
     return tulipy.aroon(*args, **kwargs)
 
 
-@cache
 @float_period(2,)
+@cache
 def aroonosc(*args, **kwargs):
     return tulipy.aroonosc(*args, **kwargs)
 
@@ -73,8 +73,8 @@ def atan(*args, **kwargs):
     return tulipy.atan(*args, **kwargs)
 
 
-@cache
 @float_period(3,)
+@cache
 def atr(*args, **kwargs):
     return tulipy.atr(*args, **kwargs)
 
@@ -84,8 +84,8 @@ def avgprice(*args, **kwargs):
     return tulipy.avgprice(*args, **kwargs)
 
 
-@cache
 @float_period(1,)
+@cache
 def bbands(*args, **kwargs):
     return tulipy.bbands(*args, **kwargs)
 
@@ -95,8 +95,8 @@ def bop(*args, **kwargs):
     return tulipy.bop(*args, **kwargs)
 
 
-@cache
 @float_period(3,)
+@cache
 def cci(*args, **kwargs):
     return tulipy.cci(*args, **kwargs)
 
@@ -106,8 +106,8 @@ def ceil(*args, **kwargs):
     return tulipy.ceil(*args, **kwargs)
 
 
-@cache
 @float_period(1,)
+@cache
 def cmo(*args, **kwargs):
     return tulipy.cmo(*args, **kwargs)
 
@@ -132,26 +132,26 @@ def crossover(*args, **kwargs):
     return tulipy.crossover(*args, **kwargs)
 
 
-@cache
 @float_period(2,)
+@cache
 def cvi(*args, **kwargs):
     return tulipy.cvi(*args, **kwargs)
 
 
-@cache
 @float_period(1,)
+@cache
 def decay(*args, **kwargs):
     return tulipy.decay(*args, **kwargs)
 
 
-@cache
 @float_period(1,)
+@cache
 def dema(*args, **kwargs):
     return tulipy.dema(*args, **kwargs)
 
 
-@cache
 @float_period(3,)
+@cache
 def di(*args, **kwargs):
     return tulipy.di(*args, **kwargs)
 
@@ -161,32 +161,32 @@ def div(*args, **kwargs):
     return tulipy.div(*args, **kwargs)
 
 
-@cache
 @float_period(2,)
+@cache
 def dm(*args, **kwargs):
     return tulipy.dm(*args, **kwargs)
 
 
-@cache
 @float_period(1,)
+@cache
 def dpo(*args, **kwargs):
     return tulipy.dpo(*args, **kwargs)
 
 
-@cache
 @float_period(3,)
+@cache
 def dx(*args, **kwargs):
     return tulipy.dx(*args, **kwargs)
 
 
-@cache
 @float_period(1,)
+@cache
 def edecay(*args, **kwargs):
     return tulipy.edecay(*args, **kwargs)
 
 
-@cache
 @float_period(1,)
+@cache
 def ema(*args, **kwargs):
     return tulipy.ema(*args, **kwargs)
 
@@ -201,8 +201,8 @@ def exp(*args, **kwargs):
     return tulipy.exp(*args, **kwargs)
 
 
-@cache
 @float_period(2,)
+@cache
 def fisher(*args, **kwargs):
     return tulipy.fisher(*args, **kwargs)
 
@@ -212,50 +212,50 @@ def floor(*args, **kwargs):
     return tulipy.floor(*args, **kwargs)
 
 
-@cache
 @float_period(1,)
+@cache
 def fosc(*args, **kwargs):
     return tulipy.fosc(*args, **kwargs)
 
 
-@cache
 @float_period(1,)
+@cache
 def hma(*args, **kwargs):
     return tulipy.hma(*args, **kwargs)
 
 
-@cache
 @float_period(1,)
+@cache
 def kama(*args, **kwargs):
     return tulipy.kama(*args, **kwargs)
 
 
-@cache
 @float_period(4, 5)
+@cache
 def kvo(*args, **kwargs):
     return tulipy.kvo(*args, **kwargs)
 
 
-@cache
 @float_period(1,)
+@cache
 def lag(*args, **kwargs):
     return tulipy.lag(*args, **kwargs)
 
 
-@cache
 @float_period(1,)
+@cache
 def linreg(*args, **kwargs):
     return tulipy.linreg(*args, **kwargs)
 
 
-@cache
 @float_period(1,)
+@cache
 def linregintercept(*args, **kwargs):
     return tulipy.linregintercept(*args, **kwargs)
 
 
-@cache
 @float_period(1,)
+@cache
 def linregslope(*args, **kwargs):
     return tulipy.linregslope(*args, **kwargs)
 
@@ -270,8 +270,8 @@ def log10(*args, **kwargs):
     return tulipy.log10(*args, **kwargs)
 
 
-@cache
 @float_period(1, 2, 3)
+@cache
 def macd(*args, **kwargs):
     return tulipy.macd(*args, **kwargs)
 
@@ -281,20 +281,20 @@ def marketfi(*args, **kwargs):
     return tulipy.marketfi(*args, **kwargs)
 
 
-@cache
 @float_period(2,)
+@cache
 def mass(*args, **kwargs):
     return tulipy.mass(*args, **kwargs)
 
 
-@cache
 @float_period(1,)
+@cache
 def max(*args, **kwargs):
     return tulipy.max(*args, **kwargs)
 
 
-@cache
 @float_period(1,)
+@cache
 def md(*args, **kwargs):
     return tulipy.md(*args, **kwargs)
 
@@ -304,26 +304,26 @@ def medprice(*args, **kwargs):
     return tulipy.medprice(*args, **kwargs)
 
 
-@cache
 @float_period(4,)
+@cache
 def mfi(*args, **kwargs):
     return tulipy.mfi(*args, **kwargs)
 
 
-@cache
 @float_period(1,)
+@cache
 def min(*args, **kwargs):
     return tulipy.min(*args, **kwargs)
 
 
-@cache
 @float_period(1,)
+@cache
 def mom(*args, **kwargs):
     return tulipy.mom(*args, **kwargs)
 
 
-@cache
 @float_period(1,)
+@cache
 def msw(*args, **kwargs):
     return tulipy.msw(*args, **kwargs)
 
@@ -333,8 +333,8 @@ def mul(*args, **kwargs):
     return tulipy.mul(*args, **kwargs)
 
 
-@cache
 @float_period(3,)
+@cache
 def natr(*args, **kwargs):
     return tulipy.natr(*args, **kwargs)
 
@@ -349,8 +349,8 @@ def obv(*args, **kwargs):
     return tulipy.obv(*args, **kwargs)
 
 
-@cache
 @float_period(1, 2)
+@cache
 def ppo(*args, **kwargs):
     return tulipy.ppo(*args, **kwargs)
 
@@ -365,20 +365,20 @@ def pvi(*args, **kwargs):
     return tulipy.pvi(*args, **kwargs)
 
 
-@cache
 @float_period(2,)
+@cache
 def qstick(*args, **kwargs):
     return tulipy.qstick(*args, **kwargs)
 
 
-@cache
 @float_period(1,)
+@cache
 def roc(*args, **kwargs):
     return tulipy.roc(*args, **kwargs)
 
 
-@cache
 @float_period(1,)
+@cache
 def rocr(*args, **kwargs):
     return tulipy.rocr(*args, **kwargs)
 
@@ -388,8 +388,8 @@ def round(*args, **kwargs):
     return tulipy.round(*args, **kwargs)
 
 
-@cache
 @float_period(1,)
+@cache
 def rsi(*args, **kwargs):
     return tulipy.rsi(*args, **kwargs)
 
@@ -404,8 +404,8 @@ def sinh(*args, **kwargs):
     return tulipy.sinh(*args, **kwargs)
 
 
-@cache
 @float_period(1,)
+@cache
 def sma(*args, **kwargs):
     return tulipy.sma(*args, **kwargs)
 
@@ -415,26 +415,26 @@ def sqrt(*args, **kwargs):
     return tulipy.sqrt(*args, **kwargs)
 
 
-@cache
 @float_period(1,)
+@cache
 def stddev(*args, **kwargs):
     return tulipy.stddev(*args, **kwargs)
 
 
-@cache
 @float_period(1,)
+@cache
 def stderr(*args, **kwargs):
     return tulipy.stderr(*args, **kwargs)
 
 
-@cache
 @float_period(3, 4, 5)
+@cache
 def stoch(*args, **kwargs):
     return tulipy.stoch(*args, **kwargs)
 
 
-@cache
 @float_period(1,)
+@cache
 def stochrsi(*args, **kwargs):
     return tulipy.stochrsi(*args, **kwargs)
 
@@ -444,8 +444,8 @@ def sub(*args, **kwargs):
     return tulipy.sub(*args, **kwargs)
 
 
-@cache
 @float_period(1,)
+@cache
 def sum(*args, **kwargs):
     return tulipy.sum(*args, **kwargs)
 
@@ -460,8 +460,8 @@ def tanh(*args, **kwargs):
     return tulipy.tanh(*args, **kwargs)
 
 
-@cache
 @float_period(1,)
+@cache
 def tema(*args, **kwargs):
     return tulipy.tema(*args, **kwargs)
 
@@ -481,14 +481,14 @@ def tr(*args, **kwargs):
     return tulipy.tr(*args, **kwargs)
 
 
-@cache
 @float_period(1,)
+@cache
 def trima(*args, **kwargs):
     return tulipy.trima(*args, **kwargs)
 
 
-@cache
 @float_period(1,)
+@cache
 def trix(*args, **kwargs):
     return tulipy.trix(*args, **kwargs)
 
@@ -498,8 +498,8 @@ def trunc(*args, **kwargs):
     return tulipy.trunc(*args, **kwargs)
 
 
-@cache
 @float_period(1,)
+@cache
 def tsf(*args, **kwargs):
     return tulipy.tsf(*args, **kwargs)
 
@@ -509,44 +509,44 @@ def typprice(*args, **kwargs):
     return tulipy.typprice(*args, **kwargs)
 
 
-@cache
 @float_period(3, 4, 5)
+@cache
 def ultosc(*args, **kwargs):
     return tulipy.ultosc(*args, **kwargs)
 
 
-@cache
 @float_period(1,)
+@cache
 def var(*args, **kwargs):
     return tulipy.var(*args, **kwargs)
 
 
-@cache
 @float_period(1,)
+@cache
 def vhf(*args, **kwargs):
     return tulipy.vhf(*args, **kwargs)
 
 
-@cache
 @float_period(1, 2)
+@cache
 def vidya(*args, **kwargs):
     return tulipy.vidya(*args, **kwargs)
 
 
-@cache
 @float_period(1,)
+@cache
 def volatility(*args, **kwargs):
     return tulipy.volatility(*args, **kwargs)
 
 
-@cache
 @float_period(1, 2)
+@cache
 def vosc(*args, **kwargs):
     return tulipy.vosc(*args, **kwargs)
 
 
-@cache
 @float_period(2,)
+@cache
 def vwma(*args, **kwargs):
     return tulipy.vwma(*args, **kwargs)
 
@@ -561,25 +561,25 @@ def wcprice(*args, **kwargs):
     return tulipy.wcprice(*args, **kwargs)
 
 
-@cache
 @float_period(1,)
+@cache
 def wilders(*args, **kwargs):
     return tulipy.wilders(*args, **kwargs)
 
 
-@cache
 @float_period(3,)
+@cache
 def willr(*args, **kwargs):
     return tulipy.willr(*args, **kwargs)
 
 
-@cache
 @float_period(1,)
+@cache
 def wma(*args, **kwargs):
     return tulipy.wma(*args, **kwargs)
 
 
-@cache
 @float_period(1,)
+@cache
 def zlema(*args, **kwargs):
     return tulipy.zlema(*args, **kwargs)
