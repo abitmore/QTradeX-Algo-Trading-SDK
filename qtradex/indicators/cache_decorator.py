@@ -1,4 +1,5 @@
 import hashlib
+import os
 import warnings
 from functools import wraps
 
@@ -6,6 +7,8 @@ import cachetools
 import numpy as np
 
 from .utilities import float_period as cython_float_period
+
+CACHE_ENABLED = os.environ.get("QTD_CACHE_DISABLE") != "1"
 
 
 def make_hashable(*args, **kwargs):
@@ -33,20 +36,19 @@ def make_hashable(*args, **kwargs):
 
 
 def cache(func):
+    if not CACHE_ENABLED:
+        return func
+
     # Create a cache with a specified size
     cache = cachetools.LRUCache(maxsize=256)
 
     @wraps(func)
     def wrapper(*args, **kwargs):
         key = make_hashable(*args, **kwargs)
-        # Generate a hash key for the function arguments
-        # key = hash(key)
 
-        # Check if the result is in the cache
         if key in cache:
             return cache[key]
 
-        # Call the function and store the result in the cache
         result = func(*args, **kwargs)
         cache[key] = result
         return result
