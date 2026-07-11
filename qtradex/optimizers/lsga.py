@@ -87,6 +87,7 @@ class LSGAoptions(QPSOoptions):
         self.skew_memory_cap = 1000
         self.reg_penalty = 0.0  # 0 = disabled; >0 (e.g. 0.15) enables ridge-like clamp-boundary penalty
         self.acceptance_temp = 0.0  # 0 = deterministic (always accept improvements); >0 enables stochastic acceptance
+        self.momentum_decay = 0.0  # 0 = no momentum; 0.9 = Adam-style momentum tracking
 
         # walk-forward consistency gate
         self.select_data = None            # None=auto-split; Data=explicit SELECT; False=disable
@@ -345,6 +346,13 @@ class LSGA(QPSO):
         coords = list(initial_result.keys())
         parameters = list(bot.tune.keys())
 
+        # Adam-style momentum per parameter
+        _momentum = {}
+        _velocity = {}
+        for p in parameters:
+            _momentum[p] = None
+            _velocity[p] = None
+
         best_bots = {coord: [initial_result.copy(), deepcopy(bot)] for coord in coords}
 
         # Initialize fitness ratios for all coordinates
@@ -444,6 +452,16 @@ class LSGA(QPSO):
                             )
                             bot.tune[neuron] += path
 
+                            # Apply momentum bias if tracking
+                            if self.options.momentum_decay > 0 and _momentum.get(neuron) is not None:
+                                eps = 1e-8
+                                m = _momentum[neuron]
+                                v = _velocity[neuron]
+                                momentum_scale = self.options.temperature * 0.3
+                                bias = momentum_scale * m / (math.sqrt(abs(v)) + eps)
+                                if abs(bias) < abs(path) * 3:
+                                    bot.tune[neuron] += bias
+
                         # Bound neurons to reasonable values
                         bound_neurons(bot)
 
@@ -525,6 +543,23 @@ class LSGA(QPSO):
                                     improvements += 1
                                     last_improvement = idx
                                     improved_bot = bot
+
+                        # Update momentum for each mutated parameter
+                        if self.options.momentum_decay > 0 and improved:
+                            beta = self.options.momentum_decay
+                            for neuron in neurons:
+                                prev = best_bots[coord][1].tune[neuron]
+                                cur = improved_bot.tune[neuron]
+                                if isinstance(prev, np.ndarray):
+                                    step = float(cur.flat[0]) - float(prev.flat[0]) if hasattr(cur, 'flat') else float(cur) - float(prev.flat[0])
+                                else:
+                                    step = float(cur) - float(prev)
+                                if _momentum[neuron] is None:
+                                    _momentum[neuron] = step
+                                    _velocity[neuron] = step ** 2
+                                else:
+                                    _momentum[neuron] = beta * _momentum[neuron] + (1 - beta) * step
+                                    _velocity[neuron] = beta * _velocity[neuron] + (1 - beta) * (step ** 2)
 
                     # Print relevant information and results if enabled
                     if self.options.show_terminal:
