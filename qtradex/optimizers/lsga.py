@@ -86,6 +86,7 @@ class LSGAoptions(QPSOoptions):
         self.skew_sigma = 0.01
         self.skew_memory_cap = 1000
         self.reg_penalty = 0.0  # 0 = disabled; >0 (e.g. 0.15) enables ridge-like clamp-boundary penalty
+        self.acceptance_temp = 0.0  # 0 = deterministic (always accept improvements); >0 enables stochastic acceptance
 
         # walk-forward consistency gate
         self.select_data = None            # None=auto-split; Data=explicit SELECT; False=disable
@@ -512,12 +513,18 @@ class LSGA(QPSO):
                     for new_score, bot in new_scores:
                         for coord, (check_score, _) in best_bots.copy().items():
                             if new_score[coord] > check_score[coord]:
-                                best_bots[coord] = (new_score, bot)
-                                boom.append(coord)
-                                improved = True
-                                improvements += 1
-                                last_improvement = idx
-                                improved_bot = bot
+                                accept = True
+                                if self.options.acceptance_temp > 0:
+                                    improvement = abs(new_score[coord] - check_score[coord]) / max(1e-8, abs(check_score[coord]))
+                                    prob = min(1.0, improvement / self.options.acceptance_temp)
+                                    accept = random() < prob
+                                if accept:
+                                    best_bots[coord] = (new_score, bot)
+                                    boom.append(coord)
+                                    improved = True
+                                    improvements += 1
+                                    last_improvement = idx
+                                    improved_bot = bot
 
                     # Print relevant information and results if enabled
                     if self.options.show_terminal:

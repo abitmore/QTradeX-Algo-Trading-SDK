@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import matplotlib.style as mplstyle
 import numpy as np
 from matplotlib.collections import LineCollection
-from qtradex.common.utilities import NIL, expand_bools, rotate, sigfig
+from qtradex.common.utilities import expand_bools, rotate, sigfig
 from qtradex.private.signals import Buy, Sell
 
 if not os.environ.get("MPLBACKEND"):
@@ -495,19 +495,10 @@ def compute_potential_balances(asset_balance, currency_balance, price):
     currency_balance = np.array(currency_balance)
     price = np.array(price)
 
-    # Calculate the potential asset balance if all currency were sold at current price
-    potential_assets = currency_balance / price
-
-    # Calculate the potential currency if all assets were sold at current price
-    potential_currency = asset_balance * price
-
-    # Merge the actual currency with potential currency
-    merged_currency_balance = np.where(
-        currency_balance > NIL, currency_balance, potential_currency
-    )
-    # Repeat for assets
-    merged_asset_balance = np.where(
-        asset_balance > NIL, asset_balance, potential_assets
-    )
+    # Always show full position value in each asset's terms:
+    # - currency line: BTC held at market price + USDT held = total USDT value
+    # - asset line: BTC held + USDT held converted to BTC = total BTC value
+    merged_currency_balance = asset_balance * price + currency_balance
+    merged_asset_balance = asset_balance + currency_balance / price
 
     return merged_asset_balance, merged_currency_balance
