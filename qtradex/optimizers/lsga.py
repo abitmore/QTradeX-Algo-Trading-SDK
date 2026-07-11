@@ -60,7 +60,7 @@ class LSGAoptions(QPSOoptions):
         super().__init__()
         self.population = 20
         self.offspring = 10
-        self.top_ratio = 0.05
+        self.top_ratio = 0.20
         self.processes = os.cpu_count() or 3
         self.fitness_ratios = None
         self.fitness_period = 20
@@ -89,7 +89,7 @@ class LSGAoptions(QPSOoptions):
         # walk-forward consistency gate
         self.select_data = None            # None=auto-split; Data=explicit SELECT; False=disable
         self.consistency_fn = None         # None = built-in _adr_consistency
-        self.consistency_target = 3.0      # target TRAIN/SELECT ADR ratio at full intensity
+        self.consistency_target = 1.5      # target TRAIN/SELECT ADR ratio at full intensity
 
 
 _skew_memory: List[Tuple[np.ndarray, float]] = []
@@ -220,6 +220,13 @@ def retest_process(bot, data, wallet, todo, done, **kwargs):
 
 
 def _adr_consistency(bot, train_result, select_result, intensity, options):
+    # Anneal DD threshold: start loose (80%), tighten to target as candidate improves
+    dd_max = options.consistency_target / 4.3 + (1 - intensity) * 0.45  # ~0.35 + (1-i)*0.45
+    train_dd = train_result.get("maximum_drawdown", 0)
+    select_dd = select_result.get("maximum_drawdown", 0)
+    if max(train_dd, select_dd) > dd_max:  # cull if DD exceeds annealed threshold
+        return False
+
     train_adr = train_result["roi"] / max(train_result.get("days", 1), 1)
     select_adr = select_result["roi"] / max(select_result.get("days", 1), 1)
 
@@ -458,6 +465,7 @@ class LSGA(QPSO):
                     n_top = max(
                         int(self.options.population * self.options.top_ratio), 2
                     )
+                    n_top = min(n_top, len(new_scores))
                     good_performers = sample(new_scores[:n_top], n_top)
 
                     # Merge best performers to create offspring
