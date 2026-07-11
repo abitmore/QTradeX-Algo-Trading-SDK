@@ -13,6 +13,7 @@ class GridSearchOptions:
         self.grid_dims = 2
         self.grid_points = 10
         self.processes = os.cpu_count() or 4
+        self.grid_margin = 0.0  # fraction to trim from each clamp edge (0.15 = 30% interior only)
         self.show_terminal = True
         self.print_tune = False
         self.epochs = math.inf
@@ -93,8 +94,12 @@ class GridSearch:
                     param_values = []
                     for p in grid_params:
                         lo, mid, hi, flag = bot.clamps[p]
-                        step = (hi - lo) / (self.options.grid_points - 1) if self.options.grid_points > 1 else 0
-                        values = [lo + i * step for i in range(self.options.grid_points)]
+                        span = hi - lo
+                        margin = span * self.options.grid_margin
+                        lo_trim = lo + margin
+                        hi_trim = hi - margin
+                        step = (hi_trim - lo_trim) / (self.options.grid_points - 1) if self.options.grid_points > 1 else 0
+                        values = [lo_trim + i * step for i in range(self.options.grid_points)]
                         param_values.append(values)
 
                     n_points = 1
