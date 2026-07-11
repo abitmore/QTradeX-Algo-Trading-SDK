@@ -85,7 +85,7 @@ def preprocess_states(states, pair):
             key = "wins"
         else:
             key = "losses"
-        new_states[f"{key}"].append(trade.profit)
+        new_states[f"{key}"].append(float(trade.profit))
         new_states[f"detailed_{key}"].append(data_dict)
 
     new_states["balance_states"] = [

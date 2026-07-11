@@ -14,13 +14,16 @@ from qtradex.private.signals import Buy, Sell
 if not os.environ.get("MPLBACKEND"):
     try:
         import tkinter
+        matplotlib.use("TkAgg")
     except ImportError:
         os.environ.setdefault("MPLBACKEND", "Agg")
-    matplotlib.use("TkAgg")
 
 def maximize_window():
-    mng = plt.get_current_fig_manager()
-    mng.resize(*mng.window.maxsize())
+    try:
+        mng = plt.get_current_fig_manager()
+        mng.resize(*mng.window.maxsize())
+    except AttributeError:
+        pass
 
 
 def plotmotion(block):

@@ -88,7 +88,11 @@ def print_tune(score, bot, render=False):
     msg = ""
     just = max(map(len, score))
     for k, s in score.items():
-        msg += f"# {k}".ljust(just + 2) + f" {s:.3f}\n"
+        try:
+            val = float(s) if hasattr(s, "item") else s
+        except (TypeError, ValueError):
+            val = 0.0
+        msg += f"# {k}".ljust(just + 2) + f" {val:.3f}\n"
 
     msg += "self.tune = " + json.dumps(bot.tune, indent=4, cls=NdarrayEncoder)
     msg += "\n\n"

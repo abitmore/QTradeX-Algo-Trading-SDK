@@ -315,7 +315,11 @@ class QPSO:
             deepcopy(bot), self.data, deepcopy(self.wallet), plot=False, **kwargs
         )
         print("Initial Backtest:")
-        print(json.dumps(initial_result, indent=4))
+        try:
+            print(json.dumps(initial_result, indent=4))
+        except TypeError:
+            safe = {k: v for k, v in initial_result.items() if not callable(v)}
+            print(json.dumps(safe, indent=4))
 
         coords = list(initial_result.keys())  # Evaluation metrics (e.g., ROI, Sharpe)
         parameters = list(bot.tune.keys())  # Parameters to optimize

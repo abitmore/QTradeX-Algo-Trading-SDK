@@ -118,7 +118,7 @@ def perform_trade(operation, wallet, asset, currency, execution):
         wallet[currency] -= volume
 
     elif isinstance(operation, Sell):
-        volume = min(wallet[asset], operation.maxvolume)
+        volume = min(wallet[asset], operation.maxvolume) if wallet[asset] > 0 else operation.maxvolume
         if not volume:
             return wallet, None
         wallet[asset] -= volume
@@ -187,7 +187,10 @@ def backtest(
     initial_data = slice_candles(now, data, candle_size, 1)
 
     # Set initial wallet value based on the initial market price
-    wallet.value((data.asset, data.currency), initial_data["close"])
+    initial_close = initial_data["close"]
+    if isinstance(initial_close, np.ndarray):
+        initial_close = initial_close.item() if initial_close.size > 0 else data["close"][0]
+    wallet.value((data.asset, data.currency), initial_close)
 
     indicator_states = []
     states = []
@@ -323,7 +326,7 @@ def backtest(
         **qx.indicators.fitness.fitness(
             keys, states, raw_states, data.asset, data.currency
         ),
-        **custom,
+        **{k: v(states, raw_states) if callable(v) else v for k, v in custom.items()},
     }
 
     # I don't care how good the results are, if you don't make at least some trades, you don't count

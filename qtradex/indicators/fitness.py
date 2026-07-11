@@ -82,7 +82,7 @@ def cagr(balances, unix_timestamps):
     return (ending_value / beginning_value) ** (1 / years) - 1
 
 
-def sharpe_ratio(roi, wins=[], losses=[], risk_free_rate=1.05):
+def sharpe_ratio(roi, wins=None, losses=None, risk_free_rate=1.05):
     """
     Calculate the Sharpe Ratio.
 
@@ -95,7 +95,15 @@ def sharpe_ratio(roi, wins=[], losses=[], risk_free_rate=1.05):
     Returns:
     float: The Sharpe Ratio.
     """
-    portfolio_std_dev = np.std(wins + losses)
+    if wins is None: wins = []
+    if losses is None: losses = []
+    combined = []
+    for v in wins + losses:
+        if isinstance(v, np.ndarray):
+            combined.append(float(v.item() if v.size > 0 else 0))
+        else:
+            combined.append(float(v))
+    portfolio_std_dev = np.std(combined)
     return (roi - risk_free_rate) / (portfolio_std_dev or 1)
 
 
@@ -123,15 +131,25 @@ def maximum_drawdown(balances):
     """
     Calculate the Maximum Drawdown (MDD).
 
+    Uses running peak-to-trough, not global min/max.
+    This correctly handles the case where the global minimum
+    occurs before the global maximum.
+
     Parameters:
     balances (list): List of balance values over time.
 
     Returns:
     float: The Maximum Drawdown as a decimal.
     """
-    peak = max(balances)
-    trough = min(balances)
-    return (peak - trough) / peak
+    peak = balances[0]
+    max_dd = 0.0
+    for val in balances:
+        if val > peak:
+            peak = val
+        dd = (peak - val) / peak
+        if dd > max_dd:
+            max_dd = dd
+    return max_dd
 
 
 def calmar_ratio(cagr_value, maximum_drawdown_value):
