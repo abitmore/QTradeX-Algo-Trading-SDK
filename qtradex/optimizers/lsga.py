@@ -85,6 +85,7 @@ class LSGAoptions(QPSOoptions):
         self.skew_perturbation = 0.002
         self.skew_sigma = 0.01
         self.skew_memory_cap = 1000
+        self.reg_penalty = 0.0  # 0 = disabled; >0 (e.g. 0.15) enables ridge-like clamp-boundary penalty
 
         # walk-forward consistency gate
         self.select_data = None            # None=auto-split; Data=explicit SELECT; False=disable
@@ -130,6 +131,23 @@ def _apply_skew_memory(new_scores, clamps, sigma):
                 score_dict[k] = v * effective if v >= 0 else v * (2 - effective)
 
 
+def _apply_regularization(new_scores):
+    for score_dict, candidate_bot in new_scores:
+        reg_penalty = 1.0
+        for key, val in candidate_bot.tune.items():
+            if key not in candidate_bot.clamps:
+                continue
+            lo, mid, hi, flag = candidate_bot.clamps[key]
+            if not flag or lo >= hi:
+                continue
+            norm = (float(val) - lo) / (hi - lo)
+            dist = abs(norm - 0.5) * 2
+            reg_penalty *= (1.0 - 0.15 * dist)
+        for k in list(score_dict.keys()):
+            if isinstance(score_dict[k], (int, float)):
+                score_dict[k] = float(score_dict[k]) * reg_penalty
+
+
 def printouts(kwargs):
     """
     Print live updates and statistics during a session.
@@ -169,8 +187,8 @@ def printouts(kwargs):
                 [
                     [0, 0]
                     + [
-                        2 if i else 0
-                        for i in kwargs["self"].options.fitness_ratios.values()
+                        2 if kwargs["self"].options.fitness_ratios.get(c, 0) else 0
+                        for c in kwargs["coords"]
                     ]
                 ]
             ),
@@ -430,6 +448,8 @@ class LSGA(QPSO):
 
                     new_scores = self.retest(todo, done, bots)
                     _apply_skew_memory(new_scores, bot.clamps, self.options.skew_sigma)
+                    if self.options.reg_penalty:
+                        _apply_regularization(new_scores)
 
                     # ponytail: walk-forward consistency gate — sequential SELECT backtest, population is small
                     if self._gate_enabled:
@@ -479,6 +499,8 @@ class LSGA(QPSO):
 
                     merged_scores = self.retest(todo, done, bots)
                     _apply_skew_memory(merged_scores, bot.clamps, self.options.skew_sigma)
+                    if self.options.reg_penalty:
+                        _apply_regularization(merged_scores)
 
                     # Merge new scores with previous ones
                     new_scores.extend(merged_scores)

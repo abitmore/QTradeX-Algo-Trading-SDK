@@ -2,6 +2,8 @@ from math import ceil, inf
 
 import matplotlib.pyplot as plt
 
+import qtradex as qx
+
 
 class BaseBot:
     def autorange(self):
