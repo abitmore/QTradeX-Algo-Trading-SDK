@@ -71,7 +71,7 @@ class TradingEnv(gym.Env):
 
         # Gym spaces
         self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(self.n_params,), dtype=np.float32)
-        self.observation_space = spaces.Box(low=0.0, high=1.0, shape=(self.n_params + 3,), dtype=np.float32)
+        self.observation_space = spaces.Box(low=0.0, high=1.0, shape=(self.n_params + 2,), dtype=np.float32)
 
         self.best_sortino = -999.0
         self.episode_count = 0
