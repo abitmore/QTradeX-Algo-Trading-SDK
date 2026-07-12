@@ -412,12 +412,21 @@ class LSGA(QPSO):
 
                     # Neuroplasticity: Select past winning synapses for adjustment
                     synapse_msg = ""
+                    _synapse_bias = {}
                     if randint(0, 2) and len(synapses) > 2:
                         synapse_msg = it("red", "synapse")
-                        neurons = choice(synapses)
-
+                        # Weighted random: higher score = more likely
+                        weights = [max(0.1, s["score"]) for s in synapses]
+                        selected = choices(synapses, weights=weights, k=1)[0]
+                        neurons = list(selected["neurons"])
+                        neurons.sort()
+                        # Store synapse bias direction for mutation step
+                        _synapse_bias = selected.get("steps", {})
+                    else:
+                        _synapse_bias = {}
+                    
                     # Limit synapse count through pruning
-                    synapses = list(set(synapses))[-self.options.synapses :]
+                    synapses = sorted(synapses, key=lambda s: s["score"], reverse=True)[:self.options.synapses]
 
                     # Select a random coordinate based on fitness ratio
                     coord = choices(
@@ -443,13 +452,14 @@ class LSGA(QPSO):
                                 else None,
                                 bot.clamps[neuron][0],  # min
                                 bot.clamps[neuron][2],  # max
-                                # is it a numpy array of ints?
                                 np.issubdtype(bot.tune[neuron].dtype, np.integer)
-                                # if it is a numpy array,
                                 if isinstance(bot.tune[neuron], np.ndarray)
-                                # else is it a single int?
                                 else isinstance(bot.tune[neuron], int),
                             )
+                            # Synapse directional bias: nudge toward previously successful direction
+                            if neuron in _synapse_bias:
+                                bias = _synapse_bias[neuron] * self.options.temperature * 0.2
+                                path += bias
                             bot.tune[neuron] += path
 
                             # Apply momentum bias if tracking
@@ -567,7 +577,13 @@ class LSGA(QPSO):
 
                     # If the bot improved, note the change and adjust iteration
                     if improved:
-                        synapses.append(tuple(neurons))
+                        neuron_tuple = tuple(neurons)
+                        existing = [s for s in synapses if s["neurons"] == neuron_tuple]
+                        if existing:
+                            existing[0]["count"] += 1
+                            existing[0]["score"] *= 1.1  # reinforce
+                        else:
+                            synapses.append({"neurons": neuron_tuple, "score": 1.0, "count": 1})
                         iteration -= 1
 
                         # --- 2D Skew check on the improved bot ---

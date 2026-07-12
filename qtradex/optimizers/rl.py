@@ -28,16 +28,26 @@ except ImportError:
     _HAS_RL = False
 
 
+def _composite(result):
+    """Composite score: sortino * (1 - max_dd) * trade_mult."""
+    sortino = result.get("sortino_ratio", 0)
+    dd = result.get("maximum_drawdown", 1)
+    trades_raw = result.get("trades", [])
+    n_trades = len(trades_raw) if isinstance(trades_raw, (list, tuple)) else result.get("trade_win_rate", 0) * 100
+    trade_mult = min(1.0, n_trades / 30) if n_trades > 0 else 0
+    return sortino * (1 - dd) * trade_mult
+
+
 class RLPPOoptions:
     """Configuration for RLPPO optimizer."""
     def __init__(self):
         self.total_timesteps = 50000     # total backtests across training
         self.learning_rate = 3e-4
-        self.gamma = 0.99                # discount factor
+        self.gamma = 0.99
         self.gae_lambda = 0.95
         self.clip_range = 0.2
-        self.ent_coef = 0.01             # entropy bonus for exploration
-        self.n_steps = 512               # steps per update
+        self.ent_coef = 0.01
+        self.n_steps = 512
         self.batch_size = 64
         self.n_epochs = 10
         self.verbose = 1
@@ -46,56 +56,68 @@ class RLPPOoptions:
         self.epochs = math.inf
         self.improvements = math.inf
         self.select_data = False
+        self.walk_forward = True   # split data, reward = min(train, val) composite
 
 
 class TradingEnv(gym.Env):
     """Gymnasium environment wrapping a QTradeX bot backtest.
 
-    State: normalized tune params (concatenated into a flat array).
+    State: normalized tune params.
     Action: continuous deltas in [-1, 1] for each tunable param.
-    Reward: sortino improvement over the best seen so far.
+    Reward: composite score (sortino * (1-DD) * trade_count).
+    If walk_forward: data split 2/3 + 1/3, reward = min(train_c, val_c).
     """
     metadata = {"render_modes": []}
 
-    def __init__(self, bot, data, wallet, **kwargs):
+    def __init__(self, bot, data, wallet, options=None, **kwargs):
         super().__init__()
         self.bot = bot
         self.data = data
         self.wallet = wallet
+        self.options = options or RLPPOoptions()
         self.kwargs = kwargs
 
-        # Extract tunable params and their clamps
         self.tunable_params = [p for p in bot.tune.keys() if bot.clamps[p][3]]
         self.clamp_info = {p: bot.clamps[p] for p in self.tunable_params}
         self.n_params = len(self.tunable_params)
 
-        # Gym spaces
         self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(self.n_params,), dtype=np.float32)
         self.observation_space = spaces.Box(low=0.0, high=1.0, shape=(self.n_params + 2,), dtype=np.float32)
 
-        self.best_sortino = -999.0
+        # Walk-forward split
+        if self.options.walk_forward:
+            split = int(len(data) * 2 / 3)
+            self._train_data = data[:split]
+            self._val_data = data[split:]
+        else:
+            self._train_data = data
+            self._val_data = None
+
+        self.best_score = -999.0
         self.episode_count = 0
 
     def _get_obs(self):
-        """Normalize current tune params to [0, 1], append performance."""
         obs = []
         for p in self.tunable_params:
             lo, _, hi, _ = self.clamp_info[p]
             val = float(self.bot.tune[p])
             obs.append((val - lo) / (hi - lo))
-        # Append rolling performance: last sortino, best sortino, progress
-        obs.append(max(-1.0, min(1.0, self.best_sortino / 10.0)))
+        obs.append(max(-1.0, min(1.0, self.best_score / 10.0)))
         obs.append(max(0.0, min(1.0, self.episode_count / 100)))
         return np.array(obs, dtype=np.float32)
 
     def _apply_action(self, action):
-        """Scale action deltas by clamp ranges and apply to tune."""
         for i, p in enumerate(self.tunable_params):
             lo, _, hi, _ = self.clamp_info[p]
             span = hi - lo
-            delta = float(action[i]) * span * 0.1  # 10% of range per step
+            delta = float(action[i]) * span * 0.1
             self.bot.tune[p] = float(self.bot.tune[p]) + delta
         bound_neurons(self.bot)
+
+    def _eval(self, data):
+        """Backtest on data, return composite score."""
+        r = backtest(deepcopy(self.bot), data, deepcopy(self.wallet), plot=False, **self.kwargs)
+        return _composite(r)
 
     def reset(self, *, seed=None, options=None):
         super().reset(seed=seed)
@@ -107,22 +129,20 @@ class TradingEnv(gym.Env):
         self._apply_action(action)
         self.episode_count += 1
 
-        result = backtest(deepcopy(self.bot), self.data, deepcopy(self.wallet), plot=False, **self.kwargs)
-        sortino = result.get("sortino_ratio", -999.0)
-        roi = result.get("roi", 0)
+        train_c = self._eval(self._train_data)
+        if self._val_data is not None:
+            val_c = self._eval(self._val_data)
+            composite = 0.7 * train_c + 0.3 * val_c
+        else:
+            composite = train_c
 
-        # Reward: sortino improvement over best
-        reward = max(-1.0, min(1.0, (sortino - self.best_sortino) / 5.0))
-        if sortino > self.best_sortino:
-            self.best_sortino = sortino
-            reward = 1.0  # big reward for new best
+        reward = max(-1.0, min(1.0, (composite - self.best_score) / 2.0))
+        if composite > self.best_score:
+            self.best_score = composite
+            reward = 1.0
 
-        # Penalize negative ROI
-        if roi <= 0:
-            reward -= 0.5
-
-        done = self.episode_count >= 500  # reset after 500 episodes to avoid stale env
-        return self._get_obs(), reward, done, False, {"sortino": sortino, "roi": roi}
+        done = self.episode_count >= 500
+        return self._get_obs(), reward, done, False, {"composite": composite}
 
 
 class RLPPO:
@@ -146,7 +166,7 @@ class RLPPO:
             print("stable-baselines3 not installed. Run: pip install stable-baselines3")
             return self._random_search(bot, **kwargs)
 
-        env = TradingEnv(bot, self.data, self.wallet, **kwargs)
+        env = TradingEnv(bot, self.data, self.wallet, options=self.options, **kwargs)
 
         model = PPO(
             "MlpPolicy",
@@ -168,13 +188,13 @@ class RLPPO:
         # Evaluate the trained policy
         print("Evaluating best policy...")
         obs, _ = env.reset()
-        best_sortino = -999
+        best_score = -999
         best_bot = deepcopy(bot)
         for _ in range(100):
             action, _ = model.predict(obs, deterministic=True)
             obs, reward, done, truncated, info = env.step(action)
-            if info.get("sortino", -999) > best_sortino:
-                best_sortino = info["sortino"]
+            if info.get("composite", -999) > best_score:
+                best_score = info["composite"]
                 best_bot = deepcopy(env.bot)
             if done:
                 break
