@@ -16,8 +16,8 @@
 </p>
 
 > 📸 See [screenshots.md](screenshots.md) for more visuals  
-> 📚 Read the core docs on [QTradeX SDK DeepWiki](https://deepwiki.com/squidKid-deluxe/QTradeX-Algo-Trading-SDK)  
-> 🤖 Explore the bots at [QTradeX AI Agents DeepWiki](https://deepwiki.com/squidKid-deluxe/QTradeX-AI-Agents)  
+> 📚 Read the docs at [**qtradex.litepresence.com/docs**](https://qtradex.litepresence.com/docs)  
+> 🤖 Explore community bots at [QTradeX AI Agents DeepWiki](https://deepwiki.com/squidKid-deluxe/QTradeX-AI-Agents)  
 > 💬 Join our [Telegram Group](https://t.me/qtradex_sdk) for discussion & support
 
 ---
@@ -178,6 +178,7 @@ Want to help out?  Check out the [Issues](https://github.com/squidKid-deluxe/QTr
 
 ## Resources
 
+* [QTradeX Docs](https://qtradex.litepresence.com/docs)
 * [QTradeX Telegram](https://t.me/qtradex_sdk)
 * [QTradeX Algo Trading Strategies](https://github.com/squidKid-deluxe/qtradex-ai-agents)
 * [Tulipy Docs](https://tulipindicators.org)
