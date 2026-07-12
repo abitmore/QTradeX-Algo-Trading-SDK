@@ -56,6 +56,39 @@ from qtradex.core.monte_carlo import monte_carlo
 
 
 class LSGAoptions(QPSOoptions):
+    """LSGA optimizer configuration.
+
+    Key features (defaults work for most cases):
+
+    Walk-forward consistency gate (anti-overfitting):
+      select_data=None   auto-split data 2/3 train + 1/3 select; culls
+                         candidates where train outperforms select by
+                         more than consistency_target (default 1.5x)
+      select_data=False  disable gate (use full data for training)
+      consistency_target max acceptable train/select ROI/day ratio
+
+    Greediness control:
+      temperature=1     mutation step size (lower = finer search)
+      acceptance_temp=0 stochastic acceptance (0=always accept
+                        improvements; >0 = probabilistic, filters noise)
+      reg_penalty=0     ridge penalty for params near clamp edges
+                        (e.g. 0.15 = up to 15% penalty at edge)
+
+    Momentum (Adam-style):
+      momentum_decay=0  per-parameter momentum tracking. 0.9 smooths
+                        mutation directions across generations
+
+    Search diversity:
+      top_ratio=0.20    fraction of population kept each generation
+                        (higher = more diversity, lower = greedier)
+      erode=0.9999      score decay rate (prevents stagnation)
+      synapses=50       number of past successful param combos to
+                        remember for replay
+
+    Monte Carlo skew check (expensive, disabled by default in pipeline):
+      skew_check_period=2   run MC every N iterations (set high to skip)
+      skew_mc_iterations=70 backtests per MC perturbation
+    """
     def __init__(self):
         super().__init__()
         self.population = 20
