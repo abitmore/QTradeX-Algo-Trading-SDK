@@ -30,6 +30,7 @@ dependencies = [
 [project.optional-dependencies]
 full = ["qtradex[bitshares]"]
 bitshares = ["bitshares-signing"]
+rl = ["stable-baselines3>=2.0.0", "gymnasium>=0.29.0"]
 
 [project.urls]
 Homepage = "https://github.com/squidKid-deluxe/QTradeX-Algo-Trading-SDK"

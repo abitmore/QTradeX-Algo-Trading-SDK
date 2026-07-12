@@ -8,3 +8,4 @@ except ImportError:
 from qtradex.optimizers.qpso import QPSO, QPSOoptions
 from qtradex.optimizers.aion import AION, AIONoptions
 from qtradex.optimizers.grid_search import GridSearch, GridSearchOptions
+from qtradex.optimizers.rl import RLPPO, RLPPOoptions
