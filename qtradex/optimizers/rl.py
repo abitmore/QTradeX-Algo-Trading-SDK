@@ -59,7 +59,7 @@ class RLPPOoptions:
         self.walk_forward = True   # split data, reward = min(train, val) composite
 
 
-class TradingEnv(gym.Env):
+class TradingEnv(gym.Env if _HAS_RL else object):
     """Gymnasium environment wrapping a QTradeX bot backtest.
 
     State: normalized tune params.
