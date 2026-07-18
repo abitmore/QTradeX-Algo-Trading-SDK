@@ -731,6 +731,43 @@ def eri(
 
 
 @cache
+@float_period(2, 3)
+def awesome_oscillator(
+    high: np.ndarray,
+    low: np.ndarray,
+    short_period: cython.int,
+    long_period: cython.int,
+) -> npt.NDArray[DATA_TYPE]:
+    """
+    Calculate the Awesome Oscillator (AO), a momentum indicator that measures
+    market momentum by comparing a short-period and a long-period simple
+    moving average of the median price.
+
+    Parameters:
+    ----------
+    high : A 1D array of high prices.
+    low : A 1D array of low prices.
+    short_period : The period for the short simple moving average (default is 5).
+    long_period : The period for the long simple moving average (default is 34).
+
+    Returns:
+    -------
+    ndarray
+        A 1D array of Awesome Oscillator values, calculated as the
+        difference between the short and long simple moving averages of
+        the median price ((high + low) / 2).
+    """
+    median_price = (high + low) / 2
+
+    short_sma = ti.sma(median_price, short_period)
+    long_sma = ti.sma(median_price, long_period)
+
+    short_sma, long_sma = truncate(short_sma, long_sma)
+
+    return short_sma - long_sma
+
+
+@cache
 @float_period(3)
 def supertrend(
     high: np.ndarray,
