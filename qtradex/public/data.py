@@ -244,6 +244,21 @@ class Data:
         rev_index_key = str((self.exchange, self.pool, candle_size, currency, asset))
         total_time = [self.begin, self.end]
         raw_candles = None
+        # Whether this call actually hit the network. Only then can raw_candles'
+        # newest candle be still-forming and need cropping; on a pure cache hit
+        # it's already the correctly-cropped data from the last write.
+        did_fetch = False
+
+        # self.end (rounded up to a candle boundary in __init__) is usually
+        # ahead of the last candle that could have actually closed, so on
+        # every end="now" startup the cache looked "stale" against self.end
+        # even when nothing new had closed, forcing a pointless re-fetch/merge
+        # of already-cached candles. effective_end is the last genuinely
+        # closed candle boundary and is used only for the cache-freshness
+        # checks below; gather ranges and the final clip still use self.end so
+        # a real gap is still filled all the way to "now".
+        last_closed_candle = math.floor(time.time() / candle_size) * candle_size - candle_size
+        effective_end = min(self.end, last_closed_candle)
         # if the exchange hasn't been queried before for this pair or its inverse
         if index_key not in index and rev_index_key not in index:
             # gather data
@@ -254,6 +269,7 @@ class Data:
             raw_candles = self.gather_data(
                 candle_size, self.begin, self.end, asset, currency
             )
+            did_fetch = True
         else:
             inverted = rev_index_key in index
             index_key = rev_index_key if inverted else index_key
@@ -282,7 +298,7 @@ class Data:
                 min_time.pop(index_key, None)
 
             # within the range of what we need
-            elif time_range[0] > self.begin and time_range[1] < self.end:
+            elif time_range[0] > self.begin and time_range[1] < effective_end:
                 # Make two queries to get the data "around" what we already have
                 gather = [
                     [self.begin, time_range[0] + candle_size],
@@ -291,17 +307,17 @@ class Data:
                 use_cache = True  # time_range[:]
 
             # covers the end of what we need but not the beginning
-            elif time_range[0] > self.begin and time_range[1] >= self.end:
+            elif time_range[0] > self.begin and time_range[1] >= effective_end:
                 gather = [[self.begin, time_range[0] + candle_size]]
                 use_cache = True  # [time_range[0], self.end]
 
             # covers the beginning of what we need but not the end
-            elif time_range[0] <= self.begin and time_range[1] < self.end:
+            elif time_range[0] <= self.begin and time_range[1] < effective_end:
                 gather = [[time_range[1] - candle_size, self.end]]
                 use_cache = True  # [self.begin, time_range[1]]
 
             # all of what we need and potentially more
-            elif time_range[0] <= self.begin and time_range[1] >= self.end:
+            elif time_range[0] <= self.begin and time_range[1] >= effective_end:
                 use_cache = True  # [self.begin, self.end]
 
             else:
@@ -311,11 +327,18 @@ class Data:
 
             data = []
             if DETAIL:
+                cache_status = (
+                    "HIT (cache already covers request, no fetch needed)"
+                    if gather is None
+                    else "MISS (fetching to fill gap)"
+                )
                 print(
-                    f"gather: {gather}  use_cache: {use_cache}  @ {candle_size}, {index_key}"
+                    f"cache {cache_status} -- gather: {gather}  use_cache: {use_cache}"
+                    f"  @ {candle_size}, {index_key}"
                 )
             # gather up data from the two sources
             if gather is not None:
+                did_fetch = True
                 for raw_batch in gather:
                     batch = [max(i, min_time.get(index_key, 0)) for i in raw_batch]
                     if batch[0] == batch[1]:
@@ -364,33 +387,38 @@ class Data:
             else:
                 total_time = [self.begin, self.end]
 
-        # write the new cache with all the data
+        # Only rewrite the cache when we actually fetched something new --
+        # on a pure cache hit, raw_candles is already the correctly-cropped
+        # on-disk data, so re-running the crop below would erroneously trim
+        # a real, already-closed candle off the cache every time.
+        if did_fetch:
+            # write the new cache with all the data
 
-        # if the last candle is incomplete, don't cache it
-        crop = -1 if time.time() - self.end < candle_size else None
-        if crop is not None and DETAIL:
-            print("Cropping last (incomplete) candle from the cache...")
-        # convert numpy arrays to lists and crop if required
-        cache = {k: v[:crop].tolist() for k, v in raw_candles.items()}
-        # find the actual start and end of the cached data
-        try:
-            total_time = [min(cache["unix"]), max(cache["unix"])]
-        except (KeyError, ValueError, TypeError) as e:
-            raise TimeoutError(
-                f"{self.exchange} does not provide data for this time range."
-            ) from e
-        # cache it
-        json_ipc(f"{index_key} candles.json", json.dumps(cache))
+            # if the last candle is incomplete, don't cache it
+            crop = -1 if time.time() - self.end < candle_size else None
+            if crop is not None and DETAIL:
+                print("Cropping last (incomplete) candle from the cache...")
+            # convert numpy arrays to lists and crop if required
+            cache = {k: v[:crop].tolist() for k, v in raw_candles.items()}
+            # find the actual start and end of the cached data
+            try:
+                total_time = [min(cache["unix"]), max(cache["unix"])]
+            except (KeyError, ValueError, TypeError) as e:
+                raise TimeoutError(
+                    f"{self.exchange} does not provide data for this time range."
+                ) from e
+            # cache it
+            json_ipc(f"{index_key} candles.json", json.dumps(cache))
+
+            # stow the start and end in the index
+            if total_time is not None:
+                index[index_key] = total_time
+                json_ipc("data_index.json", json.dumps(index))
 
         # clip the return data to the requested amount
         raw_candles = clip_to_time_range(raw_candles, self.begin, self.end)
 
         json_ipc("min_time.json", json.dumps(min_time))
-
-        # stow the start and end in the index
-        if total_time is not None:
-            index[index_key] = total_time
-            json_ipc("data_index.json", json.dumps(index))
 
         return raw_candles
 
