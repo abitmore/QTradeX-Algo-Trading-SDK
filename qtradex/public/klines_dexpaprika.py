@@ -100,6 +100,15 @@ def fetch_page(network, address, start_unix, interval):
                 time.sleep(2 * attempt)
                 continue
             resp.raise_for_status()
+            # A missing pool or network returns HTTP 200 with an empty body
+            # (a pool that exists but has no candles in range returns "[]"),
+            # so distinguish the two and fail fast with a useful message.
+            if not resp.text.strip():
+                raise ValueError(
+                    f"No pool {address!r} on network {network!r} "
+                    f"(empty response). Check the pool address at "
+                    f"https://api.dexpaprika.com/networks/{network}/pools/search"
+                )
             body = resp.json()
             if isinstance(body, dict) and "message" in body:
                 raise ValueError(f"DexPaprika: {body['message']}")
