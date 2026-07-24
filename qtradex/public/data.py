@@ -93,7 +93,7 @@ class Data:
         self.fine_data = None
         self.api_key = api_key
 
-        if self.pool is not None and exchange != "bitshares":
+        if self.pool is not None and exchange not in ("bitshares", "dexpaprika"):
             raise ValueError(
                 "Cannot get liquidity pool data for non-bitshares exchange."
             )
@@ -467,6 +467,7 @@ class Data:
                 )
             exchange_functions = {
                 "bitshares": lambda *a, **kw: __import__("qtradex.public.klines_bitshares", fromlist=["klines_bitshares"]).klines_bitshares(*a, **kw),
+                "dexpaprika": lambda *a, **kw: __import__("qtradex.public.klines_dexpaprika", fromlist=["klines_dexpaprika"]).klines_dexpaprika(*a, **kw),
                 "cryptocompare": klines_cryptocompare,
                 "alphavantage stocks": klines_alphavantage_stocks,
                 "alphavantage forex": klines_alphavantage_forex,
