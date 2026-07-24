@@ -240,8 +240,12 @@ class Data:
         except FileNotFoundError:
             json_ipc("min_time.json", "{}")
             min_time = {}
-        index_key = str((self.exchange, self.pool, candle_size, asset, currency))
-        rev_index_key = str((self.exchange, self.pool, candle_size, currency, asset))
+        # The index key becomes a cache filename, so keep the pool filesystem
+        # safe: a DEX pool like "ethereum/0x..." would otherwise put a path
+        # separator in the name and fail the json_ipc write.
+        pool_key = None if self.pool is None else str(self.pool).replace("/", "_")
+        index_key = str((self.exchange, pool_key, candle_size, asset, currency))
+        rev_index_key = str((self.exchange, pool_key, candle_size, currency, asset))
         total_time = [self.begin, self.end]
         raw_candles = None
         # Whether this call actually hit the network. Only then can raw_candles'
