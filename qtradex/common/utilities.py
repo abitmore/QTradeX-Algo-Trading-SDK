@@ -539,9 +539,13 @@ class NdarrayDecoder(json.JSONDecoder):
 # ======================================================================
 def from_iso_date(date):
     """
-    ISO to UNIX conversion
+    ISO to UNIX conversion; handles both '2026-01-01T00:00:00' and
+    '2026-01-01T00:00:00Z' timestamps (trailing Z stripped before parse).
     """
-    return int(timegm(time.strptime(str(date), "%Y-%m-%dT%H:%M:%S")))
+    date = str(date)
+    if date.endswith("Z"):
+        date = date[:-1]
+    return int(timegm(time.strptime(date, "%Y-%m-%dT%H:%M:%S")))
 
 
 def to_iso_date(unix):

@@ -16,6 +16,7 @@ from qtradex.public.klines_alphavantage import (
 )
 from qtradex.public.klines_ccxt import BadTimeframeError, klines_ccxt
 from qtradex.public.klines_cryptocompare import klines_cryptocompare
+from qtradex.public.klines_dexpaprika import klines_dexpaprika
 from qtradex.public.klines_fdr import klines_fdr
 from qtradex.public.klines_synthetic import klines_synthetic
 from qtradex.public.klines_yahoo import klines_yahoo
@@ -95,7 +96,7 @@ class Data:
 
         if self.pool is not None and exchange not in ("bitshares", "dexpaprika"):
             raise ValueError(
-                "Cannot get liquidity pool data for non-bitshares exchange."
+                "Cannot get liquidity pool data for a non-pool exchange."
             )
 
         self.raw_candles = {}
@@ -240,12 +241,8 @@ class Data:
         except FileNotFoundError:
             json_ipc("min_time.json", "{}")
             min_time = {}
-        # The index key becomes a cache filename, so keep the pool filesystem
-        # safe: a DEX pool like "ethereum/0x..." would otherwise put a path
-        # separator in the name and fail the json_ipc write.
-        pool_key = None if self.pool is None else str(self.pool).replace("/", "_")
-        index_key = str((self.exchange, pool_key, candle_size, asset, currency))
-        rev_index_key = str((self.exchange, pool_key, candle_size, currency, asset))
+        index_key = str((self.exchange, self.pool, candle_size, asset, currency))
+        rev_index_key = str((self.exchange, self.pool, candle_size, currency, asset))
         total_time = [self.begin, self.end]
         raw_candles = None
         # Whether this call actually hit the network. Only then can raw_candles'
@@ -471,7 +468,7 @@ class Data:
                 )
             exchange_functions = {
                 "bitshares": lambda *a, **kw: __import__("qtradex.public.klines_bitshares", fromlist=["klines_bitshares"]).klines_bitshares(*a, **kw),
-                "dexpaprika": lambda *a, **kw: __import__("qtradex.public.klines_dexpaprika", fromlist=["klines_dexpaprika"]).klines_dexpaprika(*a, **kw),
+                "dexpaprika": klines_dexpaprika,
                 "cryptocompare": klines_cryptocompare,
                 "alphavantage stocks": klines_alphavantage_stocks,
                 "alphavantage forex": klines_alphavantage_forex,

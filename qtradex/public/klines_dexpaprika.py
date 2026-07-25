@@ -20,7 +20,6 @@
 #
 # STANDARD MODULES
 import time
-from calendar import timegm
 
 # THIRD PARTY MODULES
 import numpy as np
@@ -28,6 +27,7 @@ import requests
 
 # EXTINCTION EVENT MODULES
 from qtradex.public.utilities import BadTimeframeError, clip_to_time_range
+from qtradex.common.utilities import from_iso_date
 
 # ======================================================================
 VERSION = "klines_dexpaprika v1.0.0"
@@ -49,39 +49,6 @@ INTERVALS = {
     43200: "12h",
     86400: "24h",
 }
-
-
-def parse_pool(pool):
-    """
-    A DexPaprika pool is identified by its network and pool address, since the
-    same token pair can trade in many pools on many chains. Accept either a
-    "network/address" (or "network:address") string, or a (network, address)
-    tuple/list.
-
-        pool="ethereum/0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640"
-        pool=("solana", "3ne4mWqdYuNiYrYZC9TrA3FcfuFdErghH97vNPbjicr1")
-    """
-    if pool is None:
-        raise ValueError(
-            "DexPaprika requires a pool, e.g. "
-            "pool='ethereum/0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640'. "
-            "Find pool addresses at https://api.dexpaprika.com/networks/{network}/pools/search"
-        )
-    if isinstance(pool, (tuple, list)):
-        network, address = pool[0], pool[1]
-    else:
-        sep = "/" if "/" in pool else ":"
-        network, _, address = str(pool).partition(sep)
-        if not address:
-            raise ValueError(
-                f"Could not parse pool {pool!r}; expected 'network/address'."
-            )
-    return network.strip(), address.strip()
-
-
-def to_unix(iso):
-    """DexPaprika timestamps look like '2026-07-23T00:00:00Z'; return epoch int."""
-    return timegm(time.strptime(iso.replace("Z", "GMT"), "%Y-%m-%dT%H:%M:%S%Z"))
 
 
 def fetch_page(network, address, start_unix, interval):
@@ -138,7 +105,7 @@ def klines_dexpaprika(asset, currency, start, end, interval, pool):
             sorted(INTERVALS.keys()),
         )
     iv = INTERVALS[interval]
-    network, address = parse_pool(pool)
+    network, address = pool.split(":", 1)
 
     if end is None:
         end = int(time.time())
@@ -156,7 +123,7 @@ def klines_dexpaprika(asset, currency, start, end, interval, pool):
             break
         fresh = 0
         for candle in page:
-            unix = to_unix(candle["time_open"])
+            unix = from_iso_date(candle["time_open"])
             if unix in seen:
                 continue
             seen.add(unix)
@@ -171,7 +138,7 @@ def klines_dexpaprika(asset, currency, start, end, interval, pool):
                     "volume": float(candle["volume"]),
                 }
             )
-        last_unix = to_unix(page[-1]["time_open"])
+        last_unix = from_iso_date(page[-1]["time_open"])
         # stop when the page is short (no more history) or we passed `end`
         if len(page) < MAX_LIMIT or last_unix >= end or fresh == 0:
             break
