@@ -211,11 +211,11 @@ Want to help out?  Check out the [Issues](https://github.com/squidKid-deluxe/QTr
 
 ## ⭐ Star History
 
-<a href="https://www.star-history.com/#squidKid-deluxe/QTradeX-Algo-Trading-SDK&Date">
+<a href="https://www.star-history.com/?repos=squidKid-deluxe%2FQtradex-algo-trading-sdk&type=date&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=squidKid-deluxe/QTradeX-Algo-Trading-SDK&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=squidKid-deluxe/QTradeX-Algo-Trading-SDK&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=squidKid-deluxe/QTradeX-Algo-Trading-SDK&type=Date" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=squidKid-deluxe/Qtradex-algo-trading-sdk&type=date&theme=dark&legend=top-left&sealed_token=ulPamp2g0fUPe6xqYIuaZ-Eo845Gwqm7tMyfXoCoikeYTlj3Ya55uCR28Axxl2vslrwuWjZvFuAy3shLCXZBrBcwWTznh5mvDE_7Ka2Orchg0pVDuB6laaG94tNwXyXx6JVggdPQf0yk_OrEPHSIwv9qh1ZZVFbYGpfoy-V2LT6IZ8x-ATwdfduRjBvY" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=squidKid-deluxe/Qtradex-algo-trading-sdk&type=date&legend=top-left&sealed_token=ulPamp2g0fUPe6xqYIuaZ-Eo845Gwqm7tMyfXoCoikeYTlj3Ya55uCR28Axxl2vslrwuWjZvFuAy3shLCXZBrBcwWTznh5mvDE_7Ka2Orchg0pVDuB6laaG94tNwXyXx6JVggdPQf0yk_OrEPHSIwv9qh1ZZVFbYGpfoy-V2LT6IZ8x-ATwdfduRjBvY" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=squidKid-deluxe/Qtradex-algo-trading-sdk&type=date&legend=top-left&sealed_token=ulPamp2g0fUPe6xqYIuaZ-Eo845Gwqm7tMyfXoCoikeYTlj3Ya55uCR28Axxl2vslrwuWjZvFuAy3shLCXZBrBcwWTznh5mvDE_7Ka2Orchg0pVDuB6laaG94tNwXyXx6JVggdPQf0yk_OrEPHSIwv9qh1ZZVFbYGpfoy-V2LT6IZ8x-ATwdfduRjBvY" />
  </picture>
 </a>
 
