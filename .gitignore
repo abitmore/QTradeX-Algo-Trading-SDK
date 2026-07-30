@@ -2,6 +2,7 @@
 dist/
 build/
 QTradeX.egg-info/
+UNKNOWN.egg-info/
 qtradex/indicators/utilities.c*
 qtradex/indicators/qi.c*
 
