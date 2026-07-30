@@ -106,7 +106,7 @@ class AIONoptions:
                  'plot_period', 'quantum_tunneling_prob', 'min_temperature', 
                  'max_temperature', 'synapses', 'neurons', 'fitness_ratios',
                  'enable_cache', 'elite_preservation', 'smart_skip_threshold',
-                 'bad_region_memory')
+                 'timeout', 'bad_region_memory')
     
     def __init__(self):
         self.epochs = math.inf
@@ -124,6 +124,7 @@ class AIONoptions:
         self.enable_cache = True
         self.elite_preservation = 3
         self.smart_skip_threshold = 10
+        self.timeout = 0
         self.bad_region_memory = 50
 
 
@@ -597,6 +598,9 @@ class AION:
                                "best": best, "boom": boom, "opts": opts, "state": st, "start": start})
                 
                 # ═══ EXIT CONDITIONS ═══
+                if opts.timeout and time.time() - start > opts.timeout:
+                    print(it("red", f"\n⏰ TIMEOUT! Backtests:{st.evaluated} ROI:{self._scalar(best['roi'][0]['roi']):.4f}"))
+                    break
                 if st.evaluated > opts.epochs:
                     print(it("green", f"\n🎯 COMPLETED! Backtests:{st.evaluated} ROI:{self._scalar(best['roi'][0]['roi']):.4f}"))
                     break

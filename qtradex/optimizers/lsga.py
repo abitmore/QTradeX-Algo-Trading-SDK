@@ -653,6 +653,7 @@ class LSGA(QPSO):
                     if (
                         idx > self.options.epochs
                         or iteration > self.options.improvements
+                        or (self.options.timeout and time.time() - lsga_start > self.options.timeout)
                     ):
                         raise KeyboardInterrupt
 

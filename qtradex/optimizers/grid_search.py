@@ -16,6 +16,7 @@ class GridSearchOptions:
         self.grid_margin = 0.0  # fraction to trim from each clamp edge (0.15 = 30% interior only)
         self.show_terminal = True
         self.print_tune = False
+        self.timeout = 0
         self.epochs = math.inf
         self.improvements = math.inf
         self.select_data = False
@@ -81,6 +82,7 @@ class GridSearch:
                 c.start()
 
             try:
+                gs_start = time.time()
                 for iteration in range(self.options.iterations):
                     if len(params) < self.options.grid_dims:
                         grid_params = params
@@ -136,13 +138,18 @@ class GridSearch:
                                 candidate.tune[p] = val
                             best_bots["sortino_ratio"] = [result, candidate]
 
+                    if self.options.timeout and time.time() - gs_start > self.options.timeout:
+                        print(f"GridSearch timed out after {self.options.timeout}s")
+                        break
+
                     if self.options.show_terminal:
                         best = best_bots["sortino_ratio"]
+                        fmt = lambda v: f"{v:.4f}" if isinstance(v, (int, float)) else str(v)
                         print(
                             f"Iter {iteration+1}/{self.options.iterations} | "
                             f"Grid: {grid_params} | "
-                            f"Best sortino: {best[0].get('sortino_ratio', 'N/A'):.4f} | "
-                            f"ROI: {best[0].get('roi', 'N/A'):.4f}"
+                            f"Best sortino: {fmt(best[0].get('sortino_ratio', 'N/A'))} | "
+                            f"ROI: {fmt(best[0].get('roi', 'N/A'))}"
                         )
 
             except KeyboardInterrupt:
@@ -154,5 +161,8 @@ class GridSearch:
         if self.options.print_tune:
             from qtradex.optimizers.utilities import print_tune as pt
             pt(best_bots["sortino_ratio"][0], best_bots["sortino_ratio"][1])
+
+        from qtradex.optimizers.utilities import end_optimization
+        end_optimization(best_bots, False)
 
         return best_bots

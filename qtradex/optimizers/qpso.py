@@ -86,6 +86,7 @@ class QPSOoptions:
         self.cooldown = 0
         self.synapses = 50
         self.neurons = []
+        self.timeout = 0
         self.show_terminal = True
         self.print_tune = False
 
@@ -409,9 +410,7 @@ class QPSO:
                     aegir, path = self.entheogen(
                         iteration,
                         parameters.index(neuron) / len(parameters),
-                        bot.tune[neuron].shape
-                        if isinstance(bot.tune[neuron], np.ndarray)
-                        else 1,
+                        None,
                         bot.clamps[neuron][0],  # min
                         bot.clamps[neuron][2],  # max
                         # is it a numpy array of ints?
@@ -455,7 +454,8 @@ class QPSO:
                         break
 
                 # Exit if iteration or improvement limits are reached
-                if idx > self.options.epochs or iteration > self.options.improvements:
+                if idx > self.options.epochs or iteration > self.options.improvements \
+                        or (self.options.timeout and time.time() - qpso_start > self.options.timeout):
                     raise KeyboardInterrupt
 
         except KeyboardInterrupt:

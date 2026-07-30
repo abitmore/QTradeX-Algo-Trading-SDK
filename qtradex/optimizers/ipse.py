@@ -59,6 +59,7 @@ class IPSEoptions:
         self.acceleration = 0.8  # controls space shrinking factor
         self.space_size = 25  # number of candidate points in parameter space
         self.processes = os.cpu_count() or 3  # number of parallel processes
+        self.timeout = 0
         self.show_terminal = True  # whether to print optimization stats
         self.print_tune = False  # whether to print final tuned parameters
 
@@ -230,6 +231,9 @@ class IPSE:
 
             try:
                 while True:
+                    if self.options.timeout and time.time() - ipse_start > self.options.timeout:
+                        print(f"IPSE timed out after {self.options.timeout}s")
+                        raise KeyboardInterrupt
                     epoch += 1
 
                     # Loop over each objective coordinate

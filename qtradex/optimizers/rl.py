@@ -53,6 +53,7 @@ class RLPPOoptions:
         self.verbose = 1
         self.show_terminal = True
         self.print_tune = False
+        self.timeout = 0
         self.epochs = math.inf
         self.improvements = math.inf
         self.select_data = False
@@ -207,6 +208,8 @@ class RLPPO:
             from qtradex.optimizers.utilities import print_tune
             print_tune(result, best_bot)
 
+        from qtradex.optimizers.utilities import end_optimization
+        end_optimization(best_bots, False)
         return best_bots
 
     def _random_search(self, bot, **kwargs):
@@ -215,7 +218,11 @@ class RLPPO:
         coords = ["sortino_ratio", "roi"]
         best_bots = {c: [{"sortino_ratio": -999, "roi": 0}, deepcopy(bot)] for c in coords}
 
+        rs_start = time.time()
         for i in range(1000):
+            if self.options.timeout and time.time() - rs_start > self.options.timeout:
+                print(f"RL fallback timed out after {self.options.timeout}s")
+                break
             trial = deepcopy(bot)
             for p in trial.tune.keys():
                 if trial.clamps[p][3]:
@@ -227,4 +234,6 @@ class RLPPO:
             if sortino > best_bots["sortino_ratio"][0].get("sortino_ratio", -999):
                 best_bots["sortino_ratio"] = [result, deepcopy(trial)]
 
+        from qtradex.optimizers.utilities import end_optimization
+        end_optimization(best_bots, False)
         return best_bots
