@@ -242,6 +242,10 @@ def backtest(
             indicators,
         )
 
+        # Suppress duplicate consecutive Buy or Sell signals
+        if isinstance(operation, (Buy, Sell)) and isinstance(last_trade, (Buy, Sell)) and type(operation) is type(last_trade):
+            operation = None
+
         # Check if enough time has passed to trade again
         if (
 
