@@ -16,6 +16,7 @@ from qtradex.public.klines_alphavantage import (
 )
 from qtradex.public.klines_ccxt import BadTimeframeError, klines_ccxt
 from qtradex.public.klines_cryptocompare import klines_cryptocompare
+from qtradex.public.klines_dexpaprika import klines_dexpaprika
 from qtradex.public.klines_fdr import klines_fdr
 from qtradex.public.klines_synthetic import klines_synthetic
 from qtradex.public.klines_yahoo import klines_yahoo
@@ -93,9 +94,9 @@ class Data:
         self.fine_data = None
         self.api_key = api_key
 
-        if self.pool is not None and exchange != "bitshares":
+        if self.pool is not None and exchange not in ("bitshares", "dexpaprika"):
             raise ValueError(
-                "Cannot get liquidity pool data for non-bitshares exchange."
+                "Cannot get liquidity pool data for a non-pool exchange."
             )
 
         self.raw_candles = {}
@@ -467,6 +468,7 @@ class Data:
                 )
             exchange_functions = {
                 "bitshares": lambda *a, **kw: __import__("qtradex.public.klines_bitshares", fromlist=["klines_bitshares"]).klines_bitshares(*a, **kw),
+                "dexpaprika": klines_dexpaprika,
                 "cryptocompare": klines_cryptocompare,
                 "alphavantage stocks": klines_alphavantage_stocks,
                 "alphavantage forex": klines_alphavantage_forex,

@@ -151,6 +151,23 @@ qx.dispatch(bot, data)
 
 See more bots in [QTradeX AI Agents](https://github.com/squidKid-deluxe/QTradeX-AI-Agents)
 
+### On-chain DEX data
+
+Backtest against on-chain DEX pools with [DexPaprika](https://docs.dexpaprika.com) (36 chains, no API key). Set `exchange="dexpaprika"` and pass the pool as `network/address`:
+
+```python
+data = qx.Data(
+    exchange="dexpaprika",
+    asset="WETH",
+    currency="USDC",
+    pool="ethereum/0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640",
+    begin="2026-01-01",
+    end="2026-07-01",
+)
+```
+
+Find pool addresses via `https://api.dexpaprika.com/networks/{network}/pools/search`.
+
 ---
 
 ## Usage Guide
