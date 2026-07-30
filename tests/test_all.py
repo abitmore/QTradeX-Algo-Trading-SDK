@@ -7,10 +7,10 @@ import os
 import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 BOT_SCRIPT = os.path.join(os.path.dirname(__file__), "..", "demos", "extinction_event.py")
 TIMEOUT = 15
-results = []
 
 
 def run(cmd, desc, expect_code=0):
@@ -23,19 +23,16 @@ def run(cmd, desc, expect_code=0):
             capture_output=True, text=True, timeout=60, env=env,
         )
     except subprocess.TimeoutExpired:
-        results.append((desc, "TIMEOUT", time.time() - start))
-        return False
+        return (desc, "TIMEOUT", time.time() - start)
     elapsed = time.time() - start
 
     if proc.returncode == expect_code:
-        results.append((desc, "PASS", elapsed))
-        return True
+        return (desc, "PASS", elapsed)
 
     stderr_tail = proc.stderr.strip().split("\n")[-5:] if proc.stderr else []
     stdout_tail = proc.stdout.strip().split("\n")[-3:] if proc.stdout else []
     tail = (stderr_tail + stdout_tail)[-5:]
-    results.append((desc, "FAIL", elapsed, proc.returncode, tail))
-    return False
+    return (desc, "FAIL", elapsed, proc.returncode, tail)
 
 
 def banner(title):
@@ -46,7 +43,7 @@ def banner(title):
     print()
 
 
-def print_results():
+def print_results(results):
     passed = 0
     failed = 0
     print()
@@ -60,8 +57,7 @@ def print_results():
             print(f"  PASS  [{elapsed:5.1f}s]  {desc}")
         else:
             failed += 1
-            rc = r[3]
-            tail = r[4]
+            rc, tail = r[3], r[4]
             print(f"  FAIL  [{elapsed:5.1f}s]  {desc}  (exit {rc})")
             if tail:
                 for line in tail:
@@ -72,34 +68,29 @@ def print_results():
     return failed
 
 
-# ── Smoke test ───────────────────────────────────────────────────────────────
+# ── Sequential preamble ──────────────────────────────────────────────────────
 
-banner("Smoke test")
-run(["--help"], "help flag")
+results = []
+banner("Smoke & seed")
+results.append(run(["--help"], "help flag"))
+results.append(run(["--tune=bot", "--optimize=GridSearch", "--timeout=5"],
+    "seed: GridSearch 5s (saves tune)"))
 
-# ── Seed a saved tune so best/latest can load ────────────────────────────────
+# ── Parallel tests ───────────────────────────────────────────────────────────
 
-banner("Seed saved tune")
-run(["--tune=bot", "--backtest"], "seed: backtest bot (creates no tune)")
-run(["--tune=bot", "--optimize=GridSearch", "--timeout=5"],
-    "seed: GridSearch 5s (saves tune)")
+banner("All tests (parallel)")
 
-# ── Backtest with each tune type ─────────────────────────────────────────────
+test_cases = []
+for tt in ["bot", "drop", "best", "latest"]:
+    test_cases.append(([f"--tune={tt}", "--backtest"], f"backtest tune={tt}"))
+for opt in ["QPSO", "LSGA", "IPSE", "AION", "GridSearch", "RL"]:
+    test_cases.append(
+        (["--tune=bot", f"--optimize={opt}", f"--timeout={TIMEOUT}"], f"optimizer {opt}")
+    )
 
-banner("Backtest — all tune types")
-tune_types = ["bot", "drop", "best", "latest"]
-for tt in tune_types:
-    run([f"--tune={tt}", "--backtest"], f"backtest tune={tt}")
+with ThreadPoolExecutor(max_workers=8) as pool:
+    futures = [pool.submit(run, cmd, desc) for cmd, desc in test_cases]
+    for f in as_completed(futures):
+        results.append(f.result())
 
-# ── Optimizer tests ──────────────────────────────────────────────────────────
-
-banner("Optimizers (timeout=15s)")
-
-optimizers = ["QPSO", "LSGA", "IPSE", "AION", "GridSearch", "RL"]
-for opt in optimizers:
-    run(["--tune=bot", f"--optimize={opt}", f"--timeout={TIMEOUT}"],
-        f"optimizer {opt}")
-
-# ── Summary ───────────────────────────────────────────────────────────────────
-
-sys.exit(print_results())
+sys.exit(print_results(results))
